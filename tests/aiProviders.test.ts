@@ -70,7 +70,7 @@ describe('AI Providers', () => {
         issue: sampleIssue,
         config: DEFAULT_SETTINGS.naming,
         apiKey: 'AIzaSyFakeKey12345678901234567890',
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.8-flash',
       });
 
       expect(result.recommended).toBe('bugfix/pay-123-fix-international-tax');
@@ -93,7 +93,7 @@ describe('AI Providers', () => {
           issue: sampleIssue,
           config: DEFAULT_SETTINGS.naming,
           apiKey: 'AIzaSyFakeKey',
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.8-flash',
         })
       ).rejects.toThrow('Gemini API rate limit reached');
     });
@@ -117,26 +117,26 @@ describe('AI Providers', () => {
       let callCount = 0;
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         callCount++;
-        // First call with gemini-2.0-flash returns 404
-        if (url.includes('gemini-2.0-flash:generateContent')) {
+        // First call with legacy/custom model returns 404
+        if (url.includes('legacy-model:generateContent')) {
           return Promise.resolve({
             ok: false,
             status: 404,
             statusText: 'Not Found',
-            json: async () => ({ error: { message: 'models/gemini-2.0-flash is not found for API version v1beta' } }),
+            json: async () => ({ error: { message: 'models/legacy-model is not found' } }),
           });
         }
-        // Fallback call with gemini-1.5-flash succeeds
+        // Fallback call with gemini-3.8-flash succeeds
         return Promise.resolve({
           ok: true,
           json: async () => ({ status: 'ok' }),
         });
       });
 
-      const res = await provider.testConnection('AIzaSyValidKey', 'gemini-2.0-flash');
+      const res = await provider.testConnection('AIzaSyValidKey', 'legacy-model');
       expect(res.success).toBe(true);
-      expect(res.modelTested).toBe('gemini-1.5-flash');
-      expect(res.message).toContain('Switched to accessible model "gemini-1.5-flash"');
+      expect(res.modelTested).toBe('gemini-3.8-flash');
+      expect(res.message).toContain('Switched to accessible model "gemini-3.8-flash"');
     });
   });
 

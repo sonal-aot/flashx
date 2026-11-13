@@ -13,28 +13,34 @@ import { SafeLogger } from '../../utils/logger';
 
 const GEMINI_MODELS: ModelInfo[] = [
   {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash (Recommended - Free Tier)',
-    description: 'Fast, reliable, free-tier eligible model accessible to all Google AI Studio keys.',
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash (Recommended)',
+    description: 'Fast, highly capable multimodal model for everyday engineering applications and agents.',
     isDefault: true,
     isFreeTier: true,
   },
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    description: 'Next-gen Flash model with high reasoning speed (subject to project availability).',
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    description: 'High-speed, cost-efficient Flash model for rapid code synthesis.',
     isFreeTier: true,
   },
   {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash Lite',
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash Lite',
     description: 'Ultra-lightweight, high throughput Flash model.',
     isFreeTier: true,
   },
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    description: 'High-reasoning model for complex code and architecture.',
+    id: 'gemini-4-carbon',
+    name: 'Gemini 4 Carbon',
+    description: 'Frontier reasoning model for agentic coding and complex logic.',
+    isFreeTier: false,
+  },
+  {
+    id: 'gemini-4-argon',
+    name: 'Gemini 4 Argon',
+    description: 'Efficient frontier reasoning model.',
     isFreeTier: false,
   },
 ];
@@ -42,9 +48,43 @@ const GEMINI_MODELS: ModelInfo[] = [
 export class GeminiProvider implements AIProvider {
   readonly id = 'gemini';
   readonly name = 'Google Gemini';
-  readonly defaultModel = 'gemini-1.5-flash';
+  readonly defaultModel = 'gemini-3.8-flash';
 
-  async getAvailableModels(): Promise<ModelInfo[]> {
+  async getAvailableModels(apiKey?: string): Promise<ModelInfo[]> {
+    if (apiKey && apiKey.trim()) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey.trim())}`,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.models)) {
+            const fetched: ModelInfo[] = data.models
+              .filter((m: { supportedGenerationMethods?: string[] }) =>
+                m.supportedGenerationMethods?.includes('generateContent')
+              )
+              .map((m: { name: string; displayName?: string; description?: string }) => {
+                const id = m.name.replace(/^models\//, '');
+                const isDefault = id === 'gemini-3.8-flash';
+                const isFreeTier = id.includes('flash');
+                return {
+                  id,
+                  name: m.displayName ? `${m.displayName} (${id})` : id,
+                  description: m.description,
+                  isDefault,
+                  isFreeTier,
+                };
+              });
+            if (fetched.length > 0) {
+              return fetched;
+            }
+          }
+        }
+      } catch {
+        // Fallback to static list
+      }
+    }
     return GEMINI_MODELS;
   }
 
@@ -63,19 +103,70 @@ export class GeminiProvider implements AIProvider {
 
   async testConnection(apiKey: string, model: string = this.defaultModel): Promise<ConnectionTestResult> {
     const start = Date.now();
-    const candidateModels = [
-      model,
-      ...(model !== 'gemini-1.5-flash' ? ['gemini-1.5-flash'] : []),
-      ...(model !== 'gemini-2.0-flash' ? ['gemini-2.0-flash'] : []),
-      'gemini-1.5-flash-latest',
-    ];
+    const trimmedKey = apiKey.trim();
+
+    // 1. Fetch available models from Google AI Studio models.list endpoint
+    let modelsFromApi: string[] = [];
+    try {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmedKey)}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (listRes.ok) {
+        const data = await listRes.json();
+        if (Array.isArray(data?.models)) {
+          modelsFromApi = data.models
+            .filter((m: { supportedGenerationMethods?: string[] }) =>
+              m.supportedGenerationMethods?.includes('generateContent')
+            )
+            .map((m: { name?: string }) => (m.name ? m.name.replace(/^models\//, '') : ''))
+            .filter(Boolean);
+        }
+      } else if (listRes.status === 400 || listRes.status === 403) {
+        const err = await listRes.json().catch(() => ({}));
+        return {
+          success: false,
+          message: 'Invalid Google AI Studio API key or project permission denied.',
+          errorDetails: err?.error?.message || listRes.statusText,
+        };
+      }
+    } catch (listErr) {
+      SafeLogger.warn('Could not list Gemini models from API, probing directly:', listErr);
+    }
+
+    // Determine candidate models to test
+    let candidateModels: string[] = [];
+    if (modelsFromApi.length > 0) {
+      if (modelsFromApi.includes(model)) {
+        candidateModels.push(model);
+      }
+      for (const pref of ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-4-carbon', 'gemini-4-argon']) {
+        if (modelsFromApi.includes(pref) && !candidateModels.includes(pref)) {
+          candidateModels.push(pref);
+        }
+      }
+      for (const m of modelsFromApi) {
+        if (!candidateModels.includes(m)) {
+          candidateModels.push(m);
+        }
+      }
+    } else {
+      candidateModels = [
+        model,
+        ...(model !== 'gemini-3.8-flash' ? ['gemini-3.8-flash'] : []),
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-4-carbon',
+        'gemini-4-argon',
+      ];
+    }
 
     let lastErrorDetails = '';
 
     for (const candidate of candidateModels) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${encodeURIComponent(
-          apiKey.trim()
+          trimmedKey
         )}`;
 
         const controller = new AbortController();
@@ -153,7 +244,7 @@ export class GeminiProvider implements AIProvider {
 
     return {
       success: false,
-      message: `Model "${model}" not found or not accessible on this key. Please select a model enabled for your project (e.g. gemini-1.5-flash).`,
+      message: `Model "${model}" not found or not accessible on this key. Please select an active model (e.g. gemini-3.8-flash).`,
       errorDetails: lastErrorDetails,
     };
   }
@@ -202,10 +293,10 @@ export class GeminiProvider implements AIProvider {
     try {
       let response = await executeCall(activeModel);
 
-      // If model not found (404) and was not already gemini-1.5-flash, fallback to gemini-1.5-flash
-      if (response.status === 404 && activeModel !== 'gemini-1.5-flash') {
-        SafeLogger.warn(`Model ${activeModel} returned 404. Falling back to gemini-1.5-flash.`);
-        activeModel = 'gemini-1.5-flash';
+      // If model not found (404) and was not already gemini-3.8-flash, fallback to gemini-3.8-flash
+      if (response.status === 404 && activeModel !== 'gemini-3.8-flash') {
+        SafeLogger.warn(`Model ${activeModel} returned 404. Falling back to gemini-3.8-flash.`);
+        activeModel = 'gemini-3.8-flash';
         response = await executeCall(activeModel);
       }
 
@@ -219,7 +310,7 @@ export class GeminiProvider implements AIProvider {
           throw new Error('Invalid Google AI Studio API key or unauthorized access.');
         }
         if (response.status === 404) {
-          throw new Error(`Gemini model "${activeModel}" not found or not accessible on this key. Please choose gemini-1.5-flash in Settings.`);
+          throw new Error(`Gemini model "${activeModel}" not found or not accessible on this key. Please choose gemini-3.8-flash in Settings.`);
         }
         throw new Error(`Gemini API error (${response.status}): ${msg}`);
       }

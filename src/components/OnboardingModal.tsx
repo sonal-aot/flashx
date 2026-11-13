@@ -12,7 +12,7 @@ interface OnboardingModalProps {
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedProvider, setSelectedProvider] = useState<ProviderId>('gemini');
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-1.5-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.8-flash');
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -24,7 +24,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
       id: 'gemini' as ProviderId,
       name: 'Google Gemini',
       tag: 'Recommended (Free Tier Available)',
-      desc: 'Fast, reliable Gemini 1.5/2.0 Flash via Google AI Studio API key.',
+      desc: 'Fast, powerful Gemini 3.8 Flash via Google AI Studio API key.',
     },
     {
       id: 'openai' as ProviderId,
