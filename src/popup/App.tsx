@@ -139,8 +139,8 @@ export const App: React.FC = () => {
     : '';
 
   return (
-    <div className="flex flex-col min-h-[460px] w-full bg-canvas text-fg">
-      <header className="flex items-center justify-between h-12 px-4 border-b border-line">
+    <div className="flex flex-col h-full w-full bg-canvas text-fg">
+      <header className="shrink-0 flex items-center justify-between h-12 px-4 border-b border-line">
         <div className="flex items-center gap-2">
           <Logo />
           <span className="text-sm font-semibold tracking-tight">FlashX</span>
@@ -153,11 +153,11 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 w-full px-4 py-5 space-y-5">
+      <main className="flex-1 min-h-0 overflow-y-auto w-full px-4 py-5 space-y-5">
         <JiraCard issue={issue} isLoading={isLoadingIssue} onRefresh={scanActiveTab} />
 
-        {issue && (
-          <section className="space-y-3">
+        {issue && !isLoadingIssue && (
+          <section className="space-y-3 animate-enter">
             {!generationResult && (
               <button onClick={handleGenerate} disabled={isGenerating} className="btn btn-primary btn-lg w-full">
                 {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
@@ -226,13 +226,13 @@ export const App: React.FC = () => {
         )}
 
         {generationResult && (
-          <div className="pt-5 border-t border-line">
+          <div className="pt-5 border-t border-line animate-enter">
             <BranchResultCard result={generationResult} onRegenerate={handleGenerate} isRegenerating={isGenerating} />
           </div>
         )}
       </main>
 
-      <footer className="flex items-center h-10 px-4 border-t border-line text-[11px] text-subtle">
+      <footer className="shrink-0 flex items-center h-10 px-4 border-t border-line text-[11px] text-subtle">
         Keys stay in your browser
       </footer>
 

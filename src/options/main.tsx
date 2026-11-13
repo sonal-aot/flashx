@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { OptionsApp } from './App';
 import '../styles/index.css';
+import { applyCachedTheme } from '../hooks/useTheme';
+
+applyCachedTheme();
 
 const rootElement = document.getElementById('root');
 if (rootElement) {

@@ -20,18 +20,26 @@ export const JiraCard: React.FC<JiraCardProps> = ({ issue, isLoading, onRefresh 
   const [isDescExpanded, setIsDescExpanded] = useState(false);
 
   if (isLoading) {
+    // Same footprint as the loaded ticket + Generate button, so nothing shifts on load.
     return (
-      <section className="space-y-2.5 animate-pulse" aria-busy="true">
-        <div className="h-3 w-24 rounded bg-raised" />
-        <div className="h-4 w-4/5 rounded bg-raised" />
-        <div className="h-4 w-3/5 rounded bg-raised" />
-      </section>
+      <div className="space-y-5 animate-pulse" aria-busy="true" aria-label="Loading ticket">
+        <div>
+          <div className="h-3.5 w-28 rounded bg-raised" />
+          <div className="mt-3 h-4 w-11/12 rounded bg-raised" />
+          <div className="mt-2 h-4 w-3/5 rounded bg-raised" />
+          <div className="mt-3.5 h-3 w-24 rounded bg-raised" />
+        </div>
+        <div className="space-y-3">
+          <div className="h-10 rounded-md bg-raised" />
+          <div className="h-7 w-48 rounded-md bg-raised" />
+        </div>
+      </div>
     );
   }
 
   if (!issue) {
     return (
-      <section className="py-6 text-center">
+      <section className="py-6 text-center animate-enter">
         <h2 className="text-sm font-semibold">No Jira ticket detected</h2>
         <p className="mt-1.5 text-xs text-muted leading-relaxed max-w-[280px] mx-auto">
           Open an issue in Jira Cloud, such as{' '}
@@ -50,7 +58,7 @@ export const JiraCard: React.FC<JiraCardProps> = ({ issue, isLoading, onRefresh 
   const TypeIcon = typeIcon(issue.issueType);
 
   return (
-    <section>
+    <section className="animate-enter">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs">
           <span className="font-mono font-semibold text-accent-text">{issue.key}</span>

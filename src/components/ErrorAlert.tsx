@@ -12,7 +12,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({ message, onRetry, onOpen
   const isKeyError = lower.includes('api key') || lower.includes('credentials') || lower.includes('unauthorized');
 
   return (
-    <div role="alert" className="p-3 rounded-lg border border-danger/40 bg-danger/5">
+    <div role="alert" className="p-3 rounded-lg border border-danger/40 bg-danger/5 animate-enter">
       <div className="flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 text-danger shrink-0 mt-px" />
         <p className="text-xs leading-relaxed">{message}</p>
