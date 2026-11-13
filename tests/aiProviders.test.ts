@@ -98,52 +98,26 @@ describe('AI Providers', () => {
       ).rejects.toThrow('Gemini API rate limit reached');
     });
 
-    it('automatically fails over to alternative Flash model when active model returns 503', async () => {
+    it('stops on 503 so the caller can use its offline fallback', async () => {
       const provider = new GeminiProvider();
 
-      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
-        // First model gemini-3.8-flash returns 503 (high demand)
-        if (url.includes('gemini-3.8-flash:generateContent')) {
-          return Promise.resolve({
-            ok: false,
-            status: 503,
-            statusText: 'Service Unavailable',
-            json: async () => ({ error: { message: 'This model is currently experiencing high demand.' } }),
-          });
-        }
-        // Failover model gemini-3.6-flash succeeds!
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      text: JSON.stringify({
-                        recommended: 'feat/M8F-640-multi-instance-iteration',
-                        alternatives: ['feat/M8F-640-bpmn-output-collection'],
-                        reason: 'Implements multi-instance iteration and completion condition.',
-                      }),
-                    },
-                  ],
-                },
-              },
-            ],
-            usageMetadata: { totalTokenCount: 140 },
-          }),
-        });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: async () => ({ error: { message: 'The service is temporarily overloaded.' } }),
       });
 
-      const result = await provider.generateBranchName({
-        issue: sampleIssue,
-        config: DEFAULT_SETTINGS.naming,
-        apiKey: 'AIzaSyFakeKey',
-        model: 'gemini-3.8-flash',
-      });
+      await expect(
+        provider.generateBranchName({
+          issue: sampleIssue,
+          config: DEFAULT_SETTINGS.naming,
+          apiKey: 'AIzaSyFakeKey',
+          model: 'gemini-3.8-flash',
+        })
+      ).rejects.toThrow('temporarily unavailable (503)');
 
-      expect(result.recommended).toBe('feat/m8f-640-multi-instance-iteration');
-      expect(result.reason).toContain('Synthesized via gemini-3.6-flash due to high traffic');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
 
     it('tests connection successfully on 200', async () => {

@@ -306,44 +306,33 @@ export class GeminiProvider implements AIProvider {
           throw new Error('Invalid Google AI Studio API key or unauthorized project access.');
         }
 
-        // If 503 (high demand), 429 (rate limit), or 404 (not found):
-        // Automatically attempt failover to next alternative Flash model
-        if (response.status === 503 || response.status === 429 || response.status === 404) {
-          SafeLogger.warn(
-            `Model "${currentModel}" returned status ${response.status}. Attempting failover to next Flash model...`
-          );
-          if (i < candidateModels.length - 1) {
-            // Brief backoff before trying next model
-            await new Promise((resolve) => setTimeout(resolve, 600));
-            continue;
-          }
+        // A 503 or 429 is usually project-wide, so another model request adds noise without helping.
+        if (response.status === 503) {
+          throw new Error('Google Gemini is temporarily unavailable (503).');
         }
-
-        // If all candidates failed with 429 (rate limit), throw rate limit error
         if (response.status === 429) {
           throw new Error('Gemini API rate limit reached. Try again in a few moments.');
         }
 
-        // If last candidate failed with 503, provide friendly message
-        if (response.status === 503) {
-          throw new Error(
-            'Google Gemini Flash models are currently experiencing temporary high traffic (503). You can retry or click "Generate Offline" for instant branch generation.'
-          );
+        if (response.status === 404) {
+          if (i < candidateModels.length - 1) {
+            continue;
+          }
         }
 
         throw new Error(`Gemini API error (${response.status}): ${lastErrorMsg}`);
       } catch (err: unknown) {
         if (
           (err as Error)?.message?.includes('Invalid Google AI Studio API key') ||
-          (err as Error)?.message?.includes('experiencing temporary high traffic')
+          (err as Error)?.message?.includes('temporarily unavailable') ||
+          (err as Error)?.message?.includes('rate limit reached')
         ) {
           throw err;
         }
 
         // Continue to next candidate model if available
         if (i < candidateModels.length - 1) {
-          SafeLogger.warn(`Request failed on ${currentModel}. Trying alternative Flash model...`);
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          SafeLogger.info(`Request failed on ${currentModel}. Trying the next available model.`);
           continue;
         }
 

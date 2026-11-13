@@ -56,8 +56,6 @@ export class BranchGenerator {
 
       return result;
     } catch (err: unknown) {
-      SafeLogger.warn('Remote AI generation encountered issue, checking graceful fallback:', err);
-
       const msg = (err as Error)?.message || '';
       // If error is a 503 high demand spike, 429 rate limit, or service unavailable:
       if (
@@ -68,11 +66,11 @@ export class BranchGenerator {
         msg.toLowerCase().includes('overloaded') ||
         msg.toLowerCase().includes('temporarily unavailable')
       ) {
-        SafeLogger.info('Provider experiencing high demand. Seamlessly generating via local rule engine fallback.');
+        SafeLogger.info('AI provider unavailable. Generating with the local rule engine.');
         const fallbackResult = FallbackGenerator.generate(issue, settings.naming);
         const resultWithNotice: BranchGenerationResult = {
           ...fallbackResult,
-          reason: `${fallbackResult.reason} (Synthesized via FlashX local engine due to temporary Google AI Studio 503 capacity spike)`,
+          reason: `${fallbackResult.reason} (Generated locally because the AI provider was temporarily unavailable)`,
         };
 
         await HistoryStorage.addHistory({
@@ -89,6 +87,7 @@ export class BranchGenerator {
         return resultWithNotice;
       }
 
+      SafeLogger.warn('Remote AI generation failed:', err);
       throw err;
     }
   }

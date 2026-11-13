@@ -13,6 +13,7 @@ import { credentialStorage } from '../storage/credentialStorage';
 import { BranchGenerator } from '../features/branch-generator/branchGenerator';
 import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { copyToClipboard } from '../utils/clipboard';
+import { JiraCloudAdapter } from '../features/jira/cloudAdapter';
 
 export const App: React.FC = () => {
   const [issue, setIssue] = useState<JiraIssue | null>(null);
@@ -55,9 +56,7 @@ export const App: React.FC = () => {
 
         // Check if URL matches Jira
         const currentUrl = activeTab.url || '';
-        const isJiraUrl =
-          currentUrl.includes('.atlassian.net') ||
-          (settings?.customJiraDomains || []).some((d) => currentUrl.includes(d));
+        const isJiraUrl = new JiraCloudAdapter().isMatch(currentUrl, settings?.customJiraDomains);
 
         if (!isJiraUrl) {
           setIssue(null);
@@ -66,19 +65,25 @@ export const App: React.FC = () => {
         }
 
         // Request issue from content script
+        let response;
         try {
-          const response = await chrome.tabs.sendMessage(activeTab.id, {
-            type: 'GET_JIRA_ISSUE',
-          });
-
-          if (response && response.success && response.issue) {
-            setIssue(response.issue);
-          } else {
+          response = await chrome.tabs.sendMessage(activeTab.id, { type: 'GET_JIRA_ISSUE' });
+        } catch {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: activeTab.id },
+              files: ['content.js'],
+            });
+            response = await chrome.tabs.sendMessage(activeTab.id, { type: 'GET_JIRA_ISSUE' });
+          } catch {
             setIssue(null);
+            return;
           }
-        } catch (tabErr) {
-          // Content script might not be injected yet or tab refreshed
-          console.warn('[FlashX] Could not communicate with content script:', tabErr);
+        }
+
+        if (response && response.success && response.issue) {
+          setIssue(response.issue);
+        } else {
           setIssue(null);
         }
       } else {

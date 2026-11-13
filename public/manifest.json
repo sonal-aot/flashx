@@ -41,7 +41,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "clipboardWrite"
+    "clipboardWrite",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.atlassian.net/*",
