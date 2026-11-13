@@ -93,13 +93,14 @@ export class GeminiProvider implements AIProvider {
   }
 
   async validateConfiguration(apiKey: string, _model?: string): Promise<ValidationResult> {
-    if (!apiKey || apiKey.trim().length === 0) {
+    const trimmed = apiKey ? apiKey.trim() : '';
+    if (!trimmed) {
       return { isValid: false, error: 'Google AI Studio API key is required.' };
     }
-    if (!apiKey.startsWith('AIza')) {
+    if (trimmed.length < 5) {
       return {
         isValid: false,
-        error: 'Key does not look like a Google AI Studio key (typically begins with "AIza").',
+        error: 'API key is too short. Please verify your credentials.',
       };
     }
     return { isValid: true };

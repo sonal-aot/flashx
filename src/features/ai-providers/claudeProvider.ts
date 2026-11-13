@@ -40,13 +40,14 @@ export class ClaudeProvider implements AIProvider {
   }
 
   async validateConfiguration(apiKey: string): Promise<ValidationResult> {
-    if (!apiKey || apiKey.trim().length === 0) {
+    const trimmed = apiKey ? apiKey.trim() : '';
+    if (!trimmed) {
       return { isValid: false, error: 'Anthropic Claude API key is required.' };
     }
-    if (!apiKey.startsWith('sk-ant-')) {
+    if (trimmed.length < 5) {
       return {
         isValid: false,
-        error: 'Key does not look like an Anthropic API key (typically begins with "sk-ant-").',
+        error: 'API key is too short. Please verify your credentials.',
       };
     }
     return { isValid: true };
