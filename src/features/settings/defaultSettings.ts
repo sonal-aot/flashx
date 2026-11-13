@@ -16,7 +16,7 @@ export const DEFAULT_ALLOWED_PREFIXES: string[] = [
 export const DEFAULT_SETTINGS: FlashXSettings = {
   activeProvider: 'gemini',
   selectedModels: {
-    gemini: 'gemini-2.0-flash',
+    gemini: 'gemini-1.5-flash',
     openai: 'gpt-4o-mini',
     claude: 'claude-3-5-haiku-20241022',
   },

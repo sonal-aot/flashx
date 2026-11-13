@@ -110,6 +110,34 @@ describe('AI Providers', () => {
       expect(res.success).toBe(true);
       expect(res.message).toContain('Successfully connected');
     });
+
+    it('automatically falls back to accessible model when primary model returns 404', async () => {
+      const provider = new GeminiProvider();
+
+      let callCount = 0;
+      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        callCount++;
+        // First call with gemini-2.0-flash returns 404
+        if (url.includes('gemini-2.0-flash:generateContent')) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+            json: async () => ({ error: { message: 'models/gemini-2.0-flash is not found for API version v1beta' } }),
+          });
+        }
+        // Fallback call with gemini-1.5-flash succeeds
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        });
+      });
+
+      const res = await provider.testConnection('AIzaSyValidKey', 'gemini-2.0-flash');
+      expect(res.success).toBe(true);
+      expect(res.modelTested).toBe('gemini-1.5-flash');
+      expect(res.message).toContain('Switched to accessible model "gemini-1.5-flash"');
+    });
   });
 
   describe('OpenAIProvider', () => {

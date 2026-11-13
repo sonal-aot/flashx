@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, Check, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
-import { ProviderId } from '../types/ai';
+import { ProviderId, ModelInfo } from '../types/ai';
 import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { credentialStorage } from '../storage/credentialStorage';
 import { SettingsStorage } from '../storage/settingsStorage';
@@ -12,6 +12,8 @@ interface OnboardingModalProps {
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedProvider, setSelectedProvider] = useState<ProviderId>('gemini');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-1.5-flash');
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -22,7 +24,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
       id: 'gemini' as ProviderId,
       name: 'Google Gemini',
       tag: 'Recommended (Free Tier Available)',
-      desc: 'Super-fast 2.0 Flash model via Google AI Studio API key.',
+      desc: 'Fast, reliable Gemini 1.5/2.0 Flash via Google AI Studio API key.',
     },
     {
       id: 'openai' as ProviderId,
@@ -38,6 +40,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
     },
   ];
 
+  // Update models when provider changes
+  useEffect(() => {
+    const provider = ProviderFactory.getProvider(selectedProvider);
+    provider.getAvailableModels().then((models) => {
+      setAvailableModels(models);
+      setSelectedModel(provider.defaultModel);
+    });
+  }, [selectedProvider]);
+
   const handleTestConnection = async () => {
     if (!apiKey.trim()) return;
     setIsTesting(true);
@@ -45,11 +56,16 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
 
     try {
       const provider = ProviderFactory.getProvider(selectedProvider);
-      const res = await provider.testConnection(apiKey.trim());
+      const res = await provider.testConnection(apiKey.trim(), selectedModel);
       setTestResult({
         success: res.success,
         message: res.message,
       });
+
+      // If test connection auto-switched to a working model, update state
+      if (res.modelTested && res.modelTested !== selectedModel) {
+        setSelectedModel(res.modelTested);
+      }
     } catch (err: unknown) {
       setTestResult({
         success: false,
@@ -64,8 +80,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
     if (apiKey.trim()) {
       await credentialStorage.setApiKey(selectedProvider, apiKey.trim());
     }
+    const currentSettings = await SettingsStorage.getSettings();
     await SettingsStorage.updateSettings({
       activeProvider: selectedProvider,
+      selectedModels: {
+        ...currentSettings.selectedModels,
+        [selectedProvider]: selectedModel,
+      },
       hasCompletedOnboarding: true,
     });
     onComplete();
@@ -159,37 +180,64 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
             <div className="space-y-3">
               <div>
                 <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Enter {selectedProvider === 'gemini' ? 'Google AI Studio' : selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic'} API Key
+                  Configure {selectedProvider === 'gemini' ? 'Google AI Studio' : selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic'}
                 </h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Stored strictly locally in your browser.
+                  Select model and enter your API key (stored strictly locally).
                 </p>
               </div>
 
-              <div className="relative">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  placeholder={
-                    selectedProvider === 'gemini'
-                      ? 'AIzaSy...'
-                      : selectedProvider === 'openai'
-                      ? 'sk-...'
-                      : 'sk-ant-...'
-                  }
-                  value={apiKey}
+              {/* Model selection dropdown */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Model
+                </label>
+                <select
+                  value={selectedModel}
                   onChange={(e) => {
-                    setApiKey(e.target.value);
+                    setSelectedModel(e.target.value);
                     setTestResult(null);
                   }}
-                  className="w-full text-xs font-mono px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 pr-9 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                  {availableModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.isFreeTier ? '(Free tier)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* API Key input */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  API Key
+                </label>
+                <div className="relative">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    placeholder={
+                      selectedProvider === 'gemini'
+                        ? 'AIzaSy...'
+                        : selectedProvider === 'openai'
+                        ? 'sk-...'
+                        : 'sk-ant-...'
+                    }
+                    value={apiKey}
+                    onChange={(e) => {
+                      setApiKey(e.target.value);
+                      setTestResult(null);
+                    }}
+                    className="w-full text-xs font-mono px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 pr-9 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {apiKey.trim() && (
