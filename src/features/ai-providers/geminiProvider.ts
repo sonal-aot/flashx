@@ -217,7 +217,12 @@ export class GeminiProvider implements AIProvider {
       ...(activeModel !== 'gemini-3.8-flash' ? ['gemini-3.8-flash'] : []),
     ];
 
-    const executeCall = async (modelToUse: string) => {
+    // Gemini 3+ models think at medium/high by default, which is most of the latency
+    // for a one-line answer. LOW is supported by every 3.x/4 model ("minimal" isn't on
+    // 3.8/4). Gemini 2.x rejects thinkingLevel, and 2.5 Flash-Lite doesn't think anyway.
+    const thinkingConfigFor = (m: string) => (/^gemini-2\./.test(m) ? undefined : { thinkingLevel: 'LOW' });
+
+    const executeCall = async (modelToUse: string, withThinkingConfig = true) => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${encodeURIComponent(
         apiKey.trim()
       )}`;
@@ -240,6 +245,9 @@ export class GeminiProvider implements AIProvider {
               responseMimeType: 'application/json',
               maxOutputTokens: 512,
               temperature: 0.2,
+              ...(withThinkingConfig && thinkingConfigFor(modelToUse)
+                ? { thinkingConfig: thinkingConfigFor(modelToUse) }
+                : {}),
             },
           }),
           signal: controller.signal,
@@ -258,7 +266,17 @@ export class GeminiProvider implements AIProvider {
     for (let i = 0; i < candidateModels.length; i++) {
       const currentModel = candidateModels[i];
       try {
-        const response = await executeCall(currentModel);
+        const started = Date.now();
+        let response = await executeCall(currentModel);
+
+        // If this model rejects the thinking setting, retry once without it
+        // instead of surfacing the 400 as an API key problem.
+        if (response.status === 400) {
+          const body = await response.clone().json().catch(() => ({}));
+          if (/thinking/i.test(body?.error?.message ?? '')) {
+            response = await executeCall(currentModel, false);
+          }
+        }
 
         if (response.ok) {
           const data = await response.json();
@@ -267,6 +285,11 @@ export class GeminiProvider implements AIProvider {
           if (!rawText) {
             throw new Error('Gemini returned an empty candidate response.');
           }
+
+          SafeLogger.info(
+            `Gemini ${currentModel} responded in ${Date.now() - started}ms ` +
+              `(thinking tokens: ${data?.usageMetadata?.thoughtsTokenCount ?? 0})`
+          );
 
           const validated = parseAndValidateAIResponse(rawText);
 

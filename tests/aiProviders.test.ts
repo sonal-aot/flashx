@@ -78,6 +78,50 @@ describe('AI Providers', () => {
       expect(result.tokensUsed).toBe(120);
     });
 
+    it('asks Gemini 3+ for low thinking and retries without it if rejected', async () => {
+      const provider = new GeminiProvider();
+      const okBody = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    recommended: 'feat/PAY-123-tax',
+                    alternatives: ['feat/PAY-123-a', 'feat/PAY-123-b'],
+                    reason: 'r',
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      };
+      const ok = { ok: true, status: 200, json: async () => okBody };
+      const rejectThinking = {
+        ok: false,
+        status: 400,
+        clone: () => ({ json: async () => ({ error: { message: 'thinkingLevel is not supported' } }) }),
+        json: async () => ({ error: { message: 'thinkingLevel is not supported' } }),
+      };
+      const sentConfig = (call: unknown[]) => JSON.parse((call[1] as { body: string }).body).generationConfig;
+      const req = { issue: sampleIssue, config: DEFAULT_SETTINGS.naming, apiKey: 'AIzaSyFakeKey' };
+
+      globalThis.fetch = vi.fn().mockResolvedValue(ok);
+      await provider.generateBranchName({ ...req, model: 'gemini-3.8-flash' });
+      expect(sentConfig(vi.mocked(fetch).mock.calls[0]).thinkingConfig).toEqual({ thinkingLevel: 'LOW' });
+
+      globalThis.fetch = vi.fn().mockResolvedValue(ok);
+      await provider.generateBranchName({ ...req, model: 'gemini-2.5-flash-lite' });
+      expect(sentConfig(vi.mocked(fetch).mock.calls[0]).thinkingConfig).toBeUndefined();
+
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(rejectThinking).mockResolvedValueOnce(ok);
+      const result = await provider.generateBranchName({ ...req, model: 'gemini-3.8-flash' });
+      expect(result.recommended).toBe('feat/pay-123-tax');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(sentConfig(vi.mocked(fetch).mock.calls[1]).thinkingConfig).toBeUndefined();
+    });
+
     it('handles Gemini 429 rate limit error gracefully', async () => {
       const provider = new GeminiProvider();
 

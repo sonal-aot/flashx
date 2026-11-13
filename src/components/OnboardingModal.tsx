@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
-import { Logo } from './Header';
+import { Logo } from './Logo';
 import { ProviderId, ModelInfo } from '../types/ai';
 import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { credentialStorage } from '../storage/credentialStorage';

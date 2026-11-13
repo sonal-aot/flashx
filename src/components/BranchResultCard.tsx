@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, RefreshCw, Pencil, ChevronDown } from 'lucide-react';
+import { Copy, Check, RefreshCw, Pencil } from 'lucide-react';
 import { BranchGenerationResult } from '../types/ai';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -24,7 +24,6 @@ export const BranchResultCard: React.FC<BranchResultCardProps> = ({ result, onRe
   const [copiedBranch, setCopiedBranch] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedBranch, setEditedBranch] = useState(result.recommended);
-  const [showAlternatives, setShowAlternatives] = useState(false);
 
   React.useEffect(() => {
     setEditedBranch(result.recommended);
@@ -87,37 +86,28 @@ export const BranchResultCard: React.FC<BranchResultCardProps> = ({ result, onRe
       </div>
 
       {alternatives.length > 0 && (
-        <div className="mt-5 pt-3 border-t border-line">
-          <button
-            onClick={() => setShowAlternatives(!showAlternatives)}
-            className="w-full flex items-center justify-between text-xs font-medium text-muted hover:text-fg transition-colors"
-            aria-expanded={showAlternatives}
-          >
-            <span>
-              {alternatives.length} alternative{alternatives.length > 1 ? 's' : ''}
-            </span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAlternatives ? 'rotate-180' : ''}`} />
-          </button>
-
-          {showAlternatives && (
-            <ul className="mt-2 divide-y divide-line">
-              {alternatives.map((alt) => (
-                <li key={alt} className="flex items-center justify-between gap-2 py-2">
-                  <span className="font-mono text-xs leading-relaxed break-all">
+        <div className="mt-6">
+          <h3 className="eyebrow mb-1">Alternatives</h3>
+          <ul className="-mx-2">
+            {alternatives.map((alt) => (
+              <li key={alt}>
+                <button
+                  onClick={() => handleCopy(alt)}
+                  className="group w-full flex items-center gap-3 px-2 py-2 rounded-md text-left hover:bg-surface transition-colors"
+                  title={`Copy ${alt}`}
+                >
+                  <span className="flex-1 min-w-0 font-mono text-xs leading-relaxed break-all">
                     <BranchName branch={alt} />
                   </span>
-                  <button
-                    onClick={() => handleCopy(alt)}
-                    className="icon-btn shrink-0"
-                    title="Copy alternative"
-                    aria-label={`Copy ${alt}`}
-                  >
-                    {copiedBranch === alt ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                  {copiedBranch === alt ? (
+                    <Check className="w-3.5 h-3.5 text-success shrink-0" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-subtle opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 shrink-0" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>
