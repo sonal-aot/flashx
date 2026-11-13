@@ -110,7 +110,6 @@ export class GeminiProvider implements AIProvider {
     const start = Date.now();
     const trimmedKey = apiKey.trim();
 
-    // Fast, lightweight verification via GET /v1beta/models/${model} (responds in ~200ms without heavy LLM inference)
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15000);
@@ -136,7 +135,6 @@ export class GeminiProvider implements AIProvider {
       const errorBody = await response.json().catch(() => ({}));
       const rawMessage = errorBody?.error?.message || response.statusText;
 
-      // If unauthorized or permission denied, stop immediately
       if (response.status === 400 || response.status === 403) {
         return {
           success: false,
@@ -145,7 +143,6 @@ export class GeminiProvider implements AIProvider {
         };
       }
 
-      // If 404 (model not found on this project), query available models list
       if (response.status === 404) {
         try {
           const listController = new AbortController();
@@ -176,13 +173,22 @@ export class GeminiProvider implements AIProvider {
             }
           }
         } catch {
-          // Ignore list error and report model not found
+          // Ignore list error
         }
 
         return {
           success: false,
           message: `Model "${model}" not found or not accessible on this key. Please select a model enabled for your project.`,
           errorDetails: rawMessage,
+        };
+      }
+
+      if (response.status === 503) {
+        return {
+          success: true,
+          message: `Connected to Google Gemini API! Note: "${model}" is currently experiencing temporary high traffic.`,
+          modelTested: model,
+          latencyMs,
         };
       }
 
@@ -213,7 +219,15 @@ export class GeminiProvider implements AIProvider {
     const { apiKey, model, config } = request;
     const { systemPrompt, userPrompt } = PromptBuilder.build(request);
 
-    let activeModel = model || this.defaultModel;
+    const activeModel = model || this.defaultModel;
+
+    // Failover candidate models if the chosen model experiences 503 high demand or 429 spikes
+    const candidateModels = [
+      activeModel,
+      ...(activeModel !== 'gemini-3.6-flash' ? ['gemini-3.6-flash'] : []),
+      ...(activeModel !== 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite'] : []),
+      ...(activeModel !== 'gemini-3.8-flash' ? ['gemini-3.8-flash'] : []),
+    ];
 
     const executeCall = async (modelToUse: string) => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${encodeURIComponent(
@@ -221,7 +235,7 @@ export class GeminiProvider implements AIProvider {
       )}`;
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000); // Generous 30s timeout for LLM inference
+      const timeout = setTimeout(() => controller.abort(), 25000);
 
       try {
         const response = await fetch(url, {
@@ -251,53 +265,96 @@ export class GeminiProvider implements AIProvider {
       }
     };
 
-    try {
-      let response = await executeCall(activeModel);
+    let lastErrorMsg = '';
 
-      // If model not found (404) and was not already gemini-3.8-flash, fallback to gemini-3.8-flash
-      if (response.status === 404 && activeModel !== 'gemini-3.8-flash') {
-        SafeLogger.warn(`Model ${activeModel} returned 404. Falling back to gemini-3.8-flash.`);
-        activeModel = 'gemini-3.8-flash';
-        response = await executeCall(activeModel);
-      }
+    for (let i = 0; i < candidateModels.length; i++) {
+      const currentModel = candidateModels[i];
+      try {
+        const response = await executeCall(currentModel);
 
-      if (!response.ok) {
+        if (response.ok) {
+          const data = await response.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+          if (!rawText) {
+            throw new Error('Gemini returned an empty candidate response.');
+          }
+
+          const validated = parseAndValidateAIResponse(rawText);
+
+          const recommended = formatBranchName(validated.recommended, config);
+          const alternatives = validated.alternatives.map((alt) => formatBranchName(alt, config));
+
+          const reasonText =
+            currentModel !== activeModel
+              ? `${validated.reason} (Synthesized via ${currentModel} due to high traffic on ${activeModel})`
+              : validated.reason;
+
+          return {
+            recommended,
+            alternatives,
+            reason: reasonText,
+            tokensUsed: data?.usageMetadata?.totalTokenCount,
+          };
+        }
+
         const errorData = await response.json().catch(() => ({}));
-        const msg = errorData?.error?.message || response.statusText;
+        lastErrorMsg = errorData?.error?.message || response.statusText;
+
+        // If key unauthorized, fail immediately
+        if (response.status === 400 || response.status === 403) {
+          throw new Error('Invalid Google AI Studio API key or unauthorized project access.');
+        }
+
+        // If 503 (high demand), 429 (rate limit), or 404 (not found):
+        // Automatically attempt failover to next alternative Flash model
+        if (response.status === 503 || response.status === 429 || response.status === 404) {
+          SafeLogger.warn(
+            `Model "${currentModel}" returned status ${response.status}. Attempting failover to next Flash model...`
+          );
+          if (i < candidateModels.length - 1) {
+            // Brief backoff before trying next model
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            continue;
+          }
+        }
+
+        // If all candidates failed with 429 (rate limit), throw rate limit error
         if (response.status === 429) {
           throw new Error('Gemini API rate limit reached. Try again in a few moments.');
         }
-        if (response.status === 400 || response.status === 403) {
-          throw new Error('Invalid Google AI Studio API key or unauthorized access.');
+
+        // If last candidate failed with 503, provide friendly message
+        if (response.status === 503) {
+          throw new Error(
+            'Google Gemini Flash models are currently experiencing temporary high traffic (503). You can retry or click "Generate Offline" for instant branch generation.'
+          );
         }
-        if (response.status === 404) {
-          throw new Error(`Gemini model "${activeModel}" not found or not accessible on this key. Please choose gemini-3.8-flash in Settings.`);
+
+        throw new Error(`Gemini API error (${response.status}): ${lastErrorMsg}`);
+      } catch (err: unknown) {
+        if (
+          (err as Error)?.message?.includes('Invalid Google AI Studio API key') ||
+          (err as Error)?.message?.includes('experiencing temporary high traffic')
+        ) {
+          throw err;
         }
-        throw new Error(`Gemini API error (${response.status}): ${msg}`);
+
+        // Continue to next candidate model if available
+        if (i < candidateModels.length - 1) {
+          SafeLogger.warn(`Request failed on ${currentModel}. Trying alternative Flash model...`);
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          continue;
+        }
+
+        SafeLogger.error('Gemini generation failed:', err);
+        throw err;
       }
-
-      const data = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!rawText) {
-        throw new Error('Gemini returned an empty candidate response.');
-      }
-
-      const validated = parseAndValidateAIResponse(rawText);
-
-      // Sanitize all branch names locally to strictly enforce Git specifications and user casing
-      const recommended = formatBranchName(validated.recommended, config);
-      const alternatives = validated.alternatives.map((alt) => formatBranchName(alt, config));
-
-      return {
-        recommended,
-        alternatives,
-        reason: validated.reason,
-        tokensUsed: data?.usageMetadata?.totalTokenCount,
-      };
-    } catch (err: unknown) {
-      SafeLogger.error('Gemini generation failed:', err);
-      throw err;
     }
+
+    throw new Error(
+      lastErrorMsg ||
+        'Gemini models are currently experiencing temporary high traffic. Please try again or use Offline Mode.'
+    );
   }
 }

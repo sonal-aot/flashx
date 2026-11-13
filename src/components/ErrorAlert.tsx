@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Key, RefreshCw, Cpu } from 'lucide-react';
+import { AlertTriangle, Key, RefreshCw, Zap } from 'lucide-react';
 
 interface ErrorAlertProps {
   message: string;
@@ -18,6 +18,13 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
     message.toLowerCase().includes('api key') ||
     message.toLowerCase().includes('credentials') ||
     message.toLowerCase().includes('unauthorized');
+
+  const isHighDemandOrOverload =
+    message.includes('503') ||
+    message.toLowerCase().includes('high demand') ||
+    message.toLowerCase().includes('high traffic') ||
+    message.toLowerCase().includes('rate limit') ||
+    message.includes('429');
 
   return (
     <div className="p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
@@ -50,10 +57,14 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
             {onUseOfflineFallback && (
               <button
                 onClick={onUseOfflineFallback}
-                className="inline-flex items-center px-2 py-1 text-[11px] font-medium rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className={`inline-flex items-center px-2 py-1 text-[11px] font-medium rounded-md shadow-xs transition ${
+                  isHighDemandOrOverload
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    : 'border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
               >
-                <Cpu className="w-3 h-3 mr-1" />
-                Generate Offline
+                <Zap className="w-3 h-3 mr-1" />
+                Generate Offline (Instant)
               </button>
             )}
           </div>

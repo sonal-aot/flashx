@@ -98,6 +98,54 @@ describe('AI Providers', () => {
       ).rejects.toThrow('Gemini API rate limit reached');
     });
 
+    it('automatically fails over to alternative Flash model when active model returns 503', async () => {
+      const provider = new GeminiProvider();
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        // First model gemini-3.8-flash returns 503 (high demand)
+        if (url.includes('gemini-3.8-flash:generateContent')) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            statusText: 'Service Unavailable',
+            json: async () => ({ error: { message: 'This model is currently experiencing high demand.' } }),
+          });
+        }
+        // Failover model gemini-3.6-flash succeeds!
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        recommended: 'feature/M8F-640-multi-instance-iteration',
+                        alternatives: ['feature/M8F-640-bpmn-output-collection'],
+                        reason: 'Implements multi-instance iteration and completion condition.',
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+            usageMetadata: { totalTokenCount: 140 },
+          }),
+        });
+      });
+
+      const result = await provider.generateBranchName({
+        issue: sampleIssue,
+        config: DEFAULT_SETTINGS.naming,
+        apiKey: 'AIzaSyFakeKey',
+        model: 'gemini-3.8-flash',
+      });
+
+      expect(result.recommended).toBe('feature/m8f-640-multi-instance-iteration');
+      expect(result.reason).toContain('Synthesized via gemini-3.6-flash due to high traffic');
+    });
+
     it('tests connection successfully on 200', async () => {
       const provider = new GeminiProvider();
 
