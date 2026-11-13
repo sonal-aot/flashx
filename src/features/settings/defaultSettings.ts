@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS: FlashXSettings = {
     ticketPosition: 'before-desc',
     separator: '-',
     casing: 'lowercase',
-    maxLength: 60,
+    maxLength: 50,
     includeKey: true,
     allowedPrefixes: DEFAULT_ALLOWED_PREFIXES,
     defaultPrefix: 'feat/',

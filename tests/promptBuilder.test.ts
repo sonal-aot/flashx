@@ -35,6 +35,8 @@ describe('PromptBuilder', () => {
     expect(prompt.systemPrompt).toContain('ci/');
     expect(prompt.systemPrompt).toContain('SECURITY & PROMPT INJECTION DEFENSE');
     expect(prompt.systemPrompt).toContain('RESPONSE FORMAT:');
+    expect(prompt.systemPrompt).toContain('Keep the description to 2-4 meaningful keywords');
+    expect(prompt.systemPrompt).toContain('under 50 characters when possible');
   });
 
   it('builds user prompt encapsulating Jira details safely as untrusted data', () => {

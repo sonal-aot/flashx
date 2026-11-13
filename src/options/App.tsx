@@ -22,7 +22,6 @@ import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { credentialStorage } from '../storage/credentialStorage';
 import { SettingsStorage } from '../storage/settingsStorage';
 import { HistoryStorage } from '../storage/historyStorage';
-import { TemplateEngine } from '../utils/templateEngine';
 import { copyToClipboard } from '../utils/clipboard';
 import { Header } from '../components/Header';
 
@@ -204,16 +203,6 @@ export const OptionsApp: React.FC = () => {
       </div>
     );
   }
-
-  // Live branch name preview for template
-  const sampleBranchPreview = TemplateEngine.render(
-    {
-      type: settings.naming.defaultPrefix || 'bugfix',
-      ticket: 'PAY-123',
-      description: 'fix-international-tax-calculation',
-    },
-    settings.naming
-  );
 
   const filteredHistory = historyItems.filter((item) => {
     if (!historySearch) return true;
@@ -489,16 +478,6 @@ export const OptionsApp: React.FC = () => {
         {/* TAB 2: Branch Naming Rules */}
         {activeTab === 'naming' && (
           <div className="space-y-6">
-            {/* Live Preview Box */}
-            <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/30">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block mb-1">
-                Live Output Preview
-              </span>
-              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-950 font-mono text-xs text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-800 break-all select-all">
-                {sampleBranchPreview}
-              </div>
-            </div>
-
             {/* Template format */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-900 dark:text-slate-100">

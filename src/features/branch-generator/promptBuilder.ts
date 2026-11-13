@@ -37,10 +37,12 @@ You MUST select one of the allowed prefixes above (preferring "feat/", "bugfix/"
 BRANCH NAME SPECIFICATIONS:
 - Preserve the exact Jira issue key "${issue.key}" (unless configured otherwise).
 - Format: Lowercase kebab-case for the description part (words separated by dashes).
-- Avoid stop words (a, an, the, for, of, with, in, on, at, to) unless essential for clarity.
-- Avoid duplicate words (e.g. do not repeat project name or ticket key).
+- Keep the full branch name under 50 characters when possible; never exceed ${config.maxLength} characters.
+- Keep the description to 2-4 meaningful keywords. Summarize the main capability; omit filler, implementation details, and secondary identifiers such as "BPMN-07".
+- Make alternatives concise and distinct by naming different key aspects of the ticket.
+- Example style: "feat/PROJ-123-multi-instance-support", "feat/PROJ-123-output-collection", "feat/PROJ-123-completion-condition".
+- Avoid stop words unless essential and never repeat the project name or ticket key.
 - No special characters (no ~, ^, :, ?, *, [, \\, @, spaces, double dashes, double slashes).
-- Maximum total length: ${config.maxLength} characters.
 - Generate EXACTLY:
   - 1 "recommended" branch name (the most concise, accurate name).
   - 2 "alternatives" (distinct variations highlighting different aspects of the ticket).
