@@ -1,11 +1,12 @@
 import { FlashXSettings } from '../../types/settings';
 
 export const DEFAULT_ALLOWED_PREFIXES: string[] = [
-  'feature/',
+  'feat/',
   'bugfix/',
+  'fix/',
+  'security/',
   'hotfix/',
   'chore/',
-  'enhancement/',
   'refactor/',
   'docs/',
   'test/',
@@ -28,7 +29,7 @@ export const DEFAULT_SETTINGS: FlashXSettings = {
     maxLength: 60,
     includeKey: true,
     allowedPrefixes: DEFAULT_ALLOWED_PREFIXES,
-    defaultPrefix: 'feature/',
+    defaultPrefix: 'feat/',
   },
   theme: 'system',
   autoCopy: false,

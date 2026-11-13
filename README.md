@@ -9,9 +9,9 @@ FlashX is a production-ready Chrome browser extension (Manifest V3) that automat
 ## ⚡ Key Highlights
 
 - **Automatic Jira Cloud Detection**: Automatically detects Jira tickets on `https://*.atlassian.net/*` (and custom enterprise Jira domains). Observes Single Page Application (SPA) transitions without excessive polling.
-- **True Engineering Intent Classification**: A Jira Story refactoring authentication is classified as `refactor/`, not `feature/`. A Task setting up CI pipelines is classified as `ci/`, not `chore/`. An urgent production fix is classified as `hotfix/`, not a generic bugfix.
+- **True Engineering Intent Classification**: A Jira Story refactoring authentication is classified as `refactor/`, not `feat/`. A Jira Bug or Story fixing CVEs or sanitizing inputs is classified as `security/`. A Task setting up CI pipelines is classified as `ci/`, not `chore/`. An urgent production fix is classified as `hotfix/`, not a generic bugfix. New capabilities use modern `feat/` rather than legacy verbose `feature/`.
 - **Provider-Agnostic BYOK (Bring Your Own Key)**:
-  - **Google Gemini**: Fast & efficient `gemini-2.0-flash` (recommended, eligible free tier available), `gemini-2.0-flash-lite`, `gemini-1.5-flash`, `gemini-1.5-pro`.
+  - **Google Gemini**: Latest models from Google AI Studio — `gemini-3.8-flash` (recommended default, free tier eligible), `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-4-carbon`, `gemini-4-argon`. Features dynamic model discovery and automatic multi-model failover with transparent fallback to the offline rule engine.
   - **OpenAI**: `gpt-4o-mini` (recommended), `gpt-4o`, `gpt-4-turbo`.
   - **Anthropic Claude**: `claude-3-5-haiku-20241022` (recommended), `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229` (configured with client-side direct browser access).
 - **Offline Rule Engine Fallback**: Can generate standard Git branch names offline without an active LLM connection.
@@ -168,7 +168,7 @@ Open **Settings** (gear icon) to customize:
 - **Word Separator**: Hyphen (`-`), Underscore (`_`), or Slash (`/`).
 - **Casing Style**: `All lowercase` or `Uppercase ticket (preserve PROJ-123)`.
 - **Max Branch Length**: Adjustable from 30 to 100 characters.
-- **Prefix Manager**: Add, toggle, or remove allowed branch prefixes (`feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`, `test/`, `perf/`, `ci/`, `chore/`, `enhancement/`).
+- **Prefix Manager**: Add, toggle, or remove allowed branch prefixes (`feat/`, `bugfix/`, `fix/`, `security/`, `hotfix/`, `refactor/`, `docs/`, `test/`, `perf/`, `ci/`, `chore/`).
 
 ### 4. Generation History
 - All generated branches are stored locally in the **History** tab.
@@ -190,7 +190,7 @@ Open **Settings** (gear icon) to customize:
 
 ## 🧪 Automated Test Coverage
 
-The test suite includes 70 tests across 10 suites:
+The test suite includes 76 tests across 10 suites:
 
 | Test Suite | Purpose | Tests |
 |---|---|---|
@@ -200,11 +200,11 @@ The test suite includes 70 tests across 10 suites:
 | `templateEngine.test.ts` | Custom templates, casing styles, token replacement, branch parsing | 7 |
 | `aiResponseSchema.test.ts` | Zod schema validation, markdown block stripping, error handling | 4 |
 | `promptBuilder.test.ts` | Engineering intent classification rules, injection defense, prompt assembly | 2 |
-| `aiProviders.test.ts` | Gemini, OpenAI, and Claude adapters (mocked 200, 401, 429, headers) | 8 |
-| `storage.test.ts` | BYOK credential storage, settings migration, history limits | 9 |
-| `fallbackGenerator.test.ts` | Offline rule engine classification across 8 intent categories | 6 |
+| `aiProviders.test.ts` | Gemini, OpenAI, and Claude adapters (mocked 200, 401, 429, 503 failover, headers) | 10 |
+| `storage.test.ts` | BYOK credential storage, settings migration (`feature/` to `feat/`), history limits | 10 |
+| `fallbackGenerator.test.ts` | Offline rule engine classification across 9 intent categories (`feat/`, `security/`, etc.) | 9 |
 | `clipboard.test.ts` | Clipboard writeText and fallback error handling | 2 |
-| **Total** | | **70 passing** |
+| **Total** | | **76 passing** |
 
 ---
 

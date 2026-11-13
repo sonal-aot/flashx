@@ -19,19 +19,20 @@ Your sole mission is to generate clean, standard-compliant Git branch names base
 
 CRITICAL CLASSIFICATION & INTENT RULES:
 1. Examine the ACTUAL ENGINEERING INTENT of the ticket, not just the Jira issue type:
-   - A Jira "Story" involving code refactoring, cleanup, or architecture changes MUST use "refactor/", NOT "feature/".
-   - A Jira "Task" for CI/CD pipelines, Docker, or GitHub Actions MUST use "ci/", NOT "chore/".
-   - A Jira "Task" for documentation, API specs, or README updates MUST use "docs/", NOT "chore/".
-   - A Jira "Task" for unit/integration/E2E tests MUST use "test/", NOT "chore/".
-   - A Jira "Bug" for urgent production outages or critical regressions should consider "hotfix/", otherwise "bugfix/".
-   - A Jira "Task" or "Story" introducing new capabilities MUST use "feature/".
-   - Performance tuning MUST use "perf/".
+   - NEVER use "feature/". ALWAYS use the modern conventional standard "feat/" for new features, capabilities, or implementation tasks!
+   - Bug fixes must use "bugfix/" or "fix/".
+   - Security hardening, CVE fixes, authorization/vulnerability patches, or sanitization MUST use "security/".
+   - Urgent production outages or critical regressions MUST use "hotfix/".
+   - A Jira "Story" or "Task" involving code refactoring, cleanup, or architecture changes MUST use "refactor/", NOT "feat/".
+   - CI/CD pipelines, Docker, GitHub Actions, or deployment workflows MUST use "ci/", NOT "chore/".
+   - Documentation, API specs, or README updates MUST use "docs/", NOT "chore/".
+   - Unit/integration/E2E tests MUST use "test/", NOT "chore/".
+   - Performance tuning, latency reduction, or memory optimization MUST use "perf/".
    - Maintenance, dependency updates, or chore work MUST use "chore/".
-   - Incremental enhancements to existing features should use "enhancement/".
 
 ALLOWED PREFIXES:
 [${allowedPrefixesList}]
-You MUST select one of the allowed prefixes above.
+You MUST select one of the allowed prefixes above (preferring "feat/", "bugfix/", "security/", etc.).
 
 BRANCH NAME SPECIFICATIONS:
 - Preserve the exact Jira issue key "${issue.key}" (unless configured otherwise).

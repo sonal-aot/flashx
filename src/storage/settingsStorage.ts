@@ -11,14 +11,30 @@ export class SettingsStorage {
       return { ...DEFAULT_SETTINGS };
     }
 
+    const naming = {
+      ...DEFAULT_SETTINGS.naming,
+      ...(stored.naming || {}),
+    };
+
+    // Migrate legacy 'feature/' to modern short 'feat/'
+    if (naming.defaultPrefix === 'feature/') {
+      naming.defaultPrefix = 'feat/';
+    }
+    if (naming.allowedPrefixes.includes('feature/')) {
+      naming.allowedPrefixes = naming.allowedPrefixes.map((p) => (p === 'feature/' ? 'feat/' : p));
+    }
+    if (!naming.allowedPrefixes.includes('feat/')) {
+      naming.allowedPrefixes.unshift('feat/');
+    }
+    if (!naming.allowedPrefixes.includes('security/')) {
+      naming.allowedPrefixes.push('security/');
+    }
+
     // Merge stored settings with defaults to ensure all fields exist (graceful migration)
     return {
       ...DEFAULT_SETTINGS,
       ...stored,
-      naming: {
-        ...DEFAULT_SETTINGS.naming,
-        ...(stored.naming || {}),
-      },
+      naming,
       selectedModels: {
         ...DEFAULT_SETTINGS.selectedModels,
         ...(stored.selectedModels || {}),

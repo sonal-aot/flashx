@@ -62,35 +62,53 @@ export class FallbackGenerator {
   private static detectPrefix(issue: JiraIssue, config: BranchNamingConfig): string {
     const text = `${issue.title} ${issue.description || ''} ${issue.issueType}`.toLowerCase();
 
+    // Security fixes & CVE patches
+    if (/\b(security|cve|vulnerability|vulnerable|sanitize|xss|csrf|sqli|injection|auth-?bypass|exploit|penetration)\b/.test(text)) {
+      return config.allowedPrefixes.includes('security/') ? 'security/' : 'fix/';
+    }
+
+    // Urgent hotfixes
     if (/\b(hotfix|urgent|critical|sev-?1|p0|outage|production\s*crash)\b/.test(text)) {
       return config.allowedPrefixes.includes('hotfix/') ? 'hotfix/' : 'bugfix/';
     }
+
+    // Bug fixes
     if (/\b(bug|fix|patch|broken|error|crash|regression|failure)\b/.test(text) || issue.issueType.toLowerCase().includes('bug')) {
-      return 'bugfix/';
+      return config.allowedPrefixes.includes('bugfix/') ? 'bugfix/' : (config.allowedPrefixes.includes('fix/') ? 'fix/' : 'bugfix/');
     }
+
+    // Refactoring
     if (/\b(refactor|clean-?up|restructure|modernize|tech-?debt)\b/.test(text)) {
       return config.allowedPrefixes.includes('refactor/') ? 'refactor/' : 'chore/';
     }
+
+    // Documentation
     if (/\b(doc|docs|readme|documentation|swagger|openapi|guide)\b/.test(text)) {
       return config.allowedPrefixes.includes('docs/') ? 'docs/' : 'chore/';
     }
+
+    // Testing
     if (/\b(test|tests|spec|specs|coverage|e2e|unit\s*test)\b/.test(text)) {
       return config.allowedPrefixes.includes('test/') ? 'test/' : 'chore/';
     }
+
+    // CI/CD pipelines
     if (/\b(ci|cd|pipeline|github\s*actions|docker|workflow|deploy)\b/.test(text)) {
       return config.allowedPrefixes.includes('ci/') ? 'ci/' : 'chore/';
     }
+
+    // Performance
     if (/\b(perf|performance|optimize|latency|speed|memory\s*leak)\b/.test(text)) {
-      return config.allowedPrefixes.includes('perf/') ? 'perf/' : 'enhancement/';
+      return config.allowedPrefixes.includes('perf/') ? 'perf/' : 'feat/';
     }
-    if (/\b(enhance|improve|better|upgrade\s*ui)\b/.test(text)) {
-      return config.allowedPrefixes.includes('enhancement/') ? 'enhancement/' : 'feature/';
-    }
+
+    // Maintenance / chore
     if (/\b(chore|dependency|dependencies|bump|npm|yarn)\b/.test(text)) {
       return 'chore/';
     }
 
-    return config.defaultPrefix || 'feature/';
+    // Default: feat/
+    return config.defaultPrefix || 'feat/';
   }
 
   private static extractKeywords(title: string): string[] {

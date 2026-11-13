@@ -25,6 +25,9 @@ describe('PromptBuilder', () => {
     });
 
     expect(prompt.systemPrompt).toContain('CRITICAL CLASSIFICATION & INTENT RULES');
+    expect(prompt.systemPrompt).toContain('feat/');
+    expect(prompt.systemPrompt).toContain('security/');
+    expect(prompt.systemPrompt).toContain('bugfix/');
     expect(prompt.systemPrompt).toContain('refactor/');
     expect(prompt.systemPrompt).toContain('hotfix/');
     expect(prompt.systemPrompt).toContain('docs/');

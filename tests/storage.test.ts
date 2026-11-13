@@ -67,6 +67,22 @@ describe('Storage Layer', () => {
       // Preserved fields
       expect(updated.naming.template).toBe('{type}/{ticket}-{description}');
     });
+
+    it('migrates legacy "feature/" prefix to "feat/" and ensures "security/" is included', async () => {
+      // Simulate existing settings with legacy 'feature/'
+      await ChromeStorageWrapper.set('settings_v1', {
+        naming: {
+          defaultPrefix: 'feature/',
+          allowedPrefixes: ['feature/', 'bugfix/'],
+        },
+      });
+
+      const migrated = await SettingsStorage.getSettings();
+      expect(migrated.naming.defaultPrefix).toBe('feat/');
+      expect(migrated.naming.allowedPrefixes).toContain('feat/');
+      expect(migrated.naming.allowedPrefixes).not.toContain('feature/');
+      expect(migrated.naming.allowedPrefixes).toContain('security/');
+    });
   });
 
   describe('HistoryStorage', () => {

@@ -121,8 +121,8 @@ describe('AI Providers', () => {
                   parts: [
                     {
                       text: JSON.stringify({
-                        recommended: 'feature/M8F-640-multi-instance-iteration',
-                        alternatives: ['feature/M8F-640-bpmn-output-collection'],
+                        recommended: 'feat/M8F-640-multi-instance-iteration',
+                        alternatives: ['feat/M8F-640-bpmn-output-collection'],
                         reason: 'Implements multi-instance iteration and completion condition.',
                       }),
                     },
@@ -142,7 +142,7 @@ describe('AI Providers', () => {
         model: 'gemini-3.8-flash',
       });
 
-      expect(result.recommended).toBe('feature/m8f-640-multi-instance-iteration');
+      expect(result.recommended).toBe('feat/m8f-640-multi-instance-iteration');
       expect(result.reason).toContain('Synthesized via gemini-3.6-flash due to high traffic');
     });
 
