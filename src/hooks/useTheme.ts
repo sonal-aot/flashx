@@ -20,11 +20,8 @@ export function useTheme() {
         t === 'dark' ||
         (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-      if (isDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
+      // Dark is the default token set; light overrides it via html.light.
+      root.classList.toggle('light', !isDark);
     };
 
     applyTheme(theme);

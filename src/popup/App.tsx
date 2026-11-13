@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Zap, RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw, GitBranch, ChevronDown } from 'lucide-react';
 import { JiraIssue } from '../types/jira';
-import { BranchGenerationResult } from '../types/ai';
+import { BranchGenerationResult, ModelInfo, ProviderId } from '../types/ai';
 import { FlashXSettings } from '../types/settings';
 import { Header } from '../components/Header';
 import { JiraCard } from '../components/JiraCard';
@@ -14,6 +14,8 @@ import { BranchGenerator } from '../features/branch-generator/branchGenerator';
 import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { copyToClipboard } from '../utils/clipboard';
 import { JiraCloudAdapter } from '../features/jira/cloudAdapter';
+
+const PROVIDER_IDS: ProviderId[] = ['gemini', 'openai', 'claude'];
 
 export const App: React.FC = () => {
   const [issue, setIssue] = useState<JiraIssue | null>(null);
@@ -102,11 +104,33 @@ export const App: React.FC = () => {
     loadSettingsAndAuth();
   }, [loadSettingsAndAuth]);
 
+  // Re-scan only once settings load (or Jira domains change), not on every model switch.
+  const settingsLoaded = settings !== null;
   useEffect(() => {
-    if (settings) {
+    if (settingsLoaded) {
       scanActiveTab();
     }
-  }, [settings, scanActiveTab]);
+  }, [settingsLoaded, scanActiveTab]);
+
+  const [modelsByProvider, setModelsByProvider] = useState<Partial<Record<ProviderId, ModelInfo[]>>>({});
+  useEffect(() => {
+    Promise.all(
+      PROVIDER_IDS.map(async (id) => [id, await ProviderFactory.getProvider(id).getAvailableModels()] as const)
+    ).then((entries) => setModelsByProvider(Object.fromEntries(entries)));
+  }, []);
+
+  const handleModelChange = async (value: string) => {
+    if (!settings) return;
+    const [providerId, ...rest] = value.split(':');
+    const model = rest.join(':');
+    const pid = providerId as ProviderId;
+    const updated = await SettingsStorage.updateSettings({
+      activeProvider: pid,
+      selectedModels: { ...settings.selectedModels, [pid]: model },
+    });
+    setSettings(updated);
+    setHasApiKey(await credentialStorage.hasApiKey(pid));
+  };
 
   // Handle generation
   const handleGenerate = async () => {
@@ -130,22 +154,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Offline fallback generation
-  const handleOfflineGenerate = async () => {
-    if (!issue) return;
-    setIsGenerating(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await BranchGenerator.generateOfflineFallback(issue);
-      setGenerationResult(result);
-    } catch (err: unknown) {
-      setErrorMessage((err as Error)?.message || 'Offline generation failed.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   const handleOpenSettings = () => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
       chrome.runtime.openOptionsPage();
@@ -158,111 +166,99 @@ export const App: React.FC = () => {
     ? ProviderFactory.getProvider(settings.activeProvider).name
     : 'AI';
 
-  const activeModelName = settings?.selectedModels[settings.activeProvider] || '';
+  const activeModelId = settings
+    ? settings.selectedModels[settings.activeProvider] || ProviderFactory.getProvider(settings.activeProvider).defaultModel
+    : '';
 
   return (
-    <div className="flex flex-col min-h-[500px] w-full max-w-[420px] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="flex flex-col min-h-[500px] w-full bg-canvas text-fg">
       <Header onOpenSettings={handleOpenSettings} />
 
-      <main className="p-4 flex-1 space-y-4">
-        {/* Jira Issue Card */}
-        <JiraCard
-          issue={issue}
-          isLoading={isLoadingIssue}
-          onRefresh={scanActiveTab}
-        />
+      <main className="flex-1 px-4 py-5 space-y-5">
+        <JiraCard issue={issue} isLoading={isLoadingIssue} onRefresh={scanActiveTab} />
 
-        {/* Error Alert */}
+        {issue && (
+          <div className="space-y-3">
+            {!generationResult && (
+              <button onClick={handleGenerate} disabled={isGenerating} className="btn btn-primary btn-lg w-full">
+                {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
+                {isGenerating ? 'Generating…' : 'Generate branch'}
+              </button>
+            )}
+
+            <label className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-muted">Model</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasApiKey ? 'bg-success' : 'bg-warn'}`}
+                  title={hasApiKey ? 'API key configured' : 'API key missing'}
+                  aria-hidden="true"
+                />
+                <span className="relative min-w-0 flex">
+                  <select
+                    value={settings ? `${settings.activeProvider}:${activeModelId}` : ''}
+                    onChange={(e) => handleModelChange(e.target.value)}
+                    disabled={!settings || isGenerating}
+                    className="min-w-0 max-w-[250px] h-7 pl-2 pr-6 rounded-md bg-surface border border-line text-fg text-[11px] font-mono truncate cursor-pointer hover:border-line-strong focus:outline-none focus:border-accent/70 appearance-none"
+                  >
+                    {PROVIDER_IDS.map((pid) => {
+                      const models = modelsByProvider[pid] ?? [];
+                      const selected = settings?.selectedModels[pid];
+                      // Keep the saved model selectable even if it's no longer in the list.
+                      const list =
+                        selected && !models.some((m) => m.id === selected)
+                          ? [{ id: selected, name: selected } as ModelInfo, ...models]
+                          : models;
+                      return (
+                        <optgroup key={pid} label={ProviderFactory.getProvider(pid).name}>
+                          {list.map((m) => (
+                            <option key={m.id} value={`${pid}:${m.id}`}>
+                              {m.id}
+                              {m.isFreeTier ? ' · free' : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {issue && !hasApiKey && (
+          <p className="text-xs text-muted">
+            No {activeProviderName} key yet.{' '}
+            <button onClick={handleOpenSettings} className="text-warn hover:underline underline-offset-2">
+              Add API key
+            </button>
+          </p>
+        )}
+
         {errorMessage && (
           <ErrorAlert
             message={errorMessage}
             onRetry={handleGenerate}
             onOpenSettings={handleOpenSettings}
-            onUseOfflineFallback={handleOfflineGenerate}
           />
         )}
 
-        {/* Generate Action Button */}
-        {issue && !generationResult && (
-          <div className="space-y-2 pt-1">
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="w-full py-2.5 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 hover:from-indigo-500 hover:to-indigo-500 active:scale-[0.99] shadow-sm shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Synthesizing Branch Name...</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 fill-amber-300 stroke-indigo-900 stroke-1" />
-                  <span>Generate Git Branch</span>
-                </>
-              )}
-            </button>
-
-            <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
-              <span className="flex items-center space-x-1">
-                <Sparkles className="w-3 h-3 text-indigo-400" />
-                <span>
-                  {activeProviderName} ({activeModelName})
-                </span>
-              </span>
-              <button
-                onClick={handleOfflineGenerate}
-                className="hover:text-indigo-500 transition underline underline-offset-2"
-                title="Generate instantly with local rule engine"
-              >
-                Offline Mode
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Generated Result Card */}
         {generationResult && (
-          <div className="pt-1">
-            <BranchResultCard
-              result={generationResult}
-              onRegenerate={handleGenerate}
-              isRegenerating={isGenerating}
-            />
+          <div className="pt-5 border-t border-line">
+            <BranchResultCard result={generationResult} onRegenerate={handleGenerate} isRegenerating={isGenerating} />
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-        <div className="flex items-center space-x-1.5">
-          <span
-            className={`w-2 h-2 rounded-full ${
-              hasApiKey ? 'bg-emerald-500' : 'bg-amber-500'
-            }`}
-          />
-          <span className="font-medium text-slate-700 dark:text-slate-300">
-            {activeProviderName}
-          </span>
-          {!hasApiKey && (
-            <button
-              onClick={handleOpenSettings}
-              className="text-amber-600 dark:text-amber-400 font-semibold hover:underline text-[10px]"
-            >
-              (Key Missing)
-            </button>
-          )}
-        </div>
-
-        <button
-          onClick={handleOpenSettings}
-          className="hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition"
-        >
+      <footer className="flex items-center justify-between h-10 px-4 border-t border-line text-[11px] text-subtle">
+        <span>Keys stay in your browser</span>
+        <button onClick={handleOpenSettings} className="shrink-0 hover:text-fg transition-colors">
           Settings
         </button>
       </footer>
 
-      {/* First-time Onboarding Modal */}
       {showOnboarding && (
         <OnboardingModal
           onComplete={() => {

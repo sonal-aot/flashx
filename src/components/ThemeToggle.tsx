@@ -11,16 +11,16 @@ export const ThemeToggle: React.FC = () => {
     else setTheme('dark');
   };
 
+  const Icon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Laptop;
+
   return (
     <button
       onClick={toggle}
-      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      title={`Current theme: ${theme} (click to toggle)`}
-      aria-label="Toggle theme"
+      className="icon-btn"
+      title={`Theme: ${theme} (click to change)`}
+      aria-label="Change theme"
     >
-      {theme === 'dark' && <Moon className="w-4 h-4 text-indigo-400" />}
-      {theme === 'light' && <Sun className="w-4 h-4 text-amber-500" />}
-      {theme === 'system' && <Laptop className="w-4 h-4 text-slate-400" />}
+      <Icon className="w-4 h-4" />
     </button>
   );
 };

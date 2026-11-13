@@ -1,42 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: light dark;
+/* FlashX design tokens. Dark (charcoal + lime) is the default identity;
+   html.light swaps the neutrals and darkens the accent text for contrast. */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --color-canvas: #0e0f11;
+  --color-surface: #16181b;
+  --color-raised: #1f2125;
+  --color-line: #2a2d32;
+  --color-line-strong: #3a3d43;
+  --color-fg: #f5f5f7;
+  --color-muted: #a1a4aa;
+  --color-subtle: #6e7178;
+  --color-accent: #c6ff32;
+  --color-accent-hover: #d5ff66;
+  --color-on-accent: #0e0f11;
+  --color-accent-text: #c6ff32;
+  --color-danger: #f87171;
+  --color-success: #4ade80;
+  --color-warn: #fbbf24;
 }
 
-/* Sleek minimalist scrollbar */
+html.light {
+  color-scheme: light;
+  --color-canvas: #ffffff;
+  --color-surface: #f5f5f7;
+  --color-raised: #ebebee;
+  --color-line: #e3e3e6;
+  --color-line-strong: #cfcfd4;
+  --color-fg: #1d1d1f;
+  --color-muted: #5f6166;
+  --color-subtle: #8a8c91;
+  --color-accent-text: #4d7c0f;
+  --color-danger: #dc2626;
+  --color-success: #15803d;
+  --color-warn: #b45309;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+  .btn-lg {
+    @apply h-10 px-4 text-[13px];
+  }
+  .btn-primary {
+    @apply bg-accent text-on-accent font-semibold hover:bg-accent-hover;
+  }
+  .btn-secondary {
+    @apply bg-raised text-fg border border-line hover:border-line-strong;
+  }
+  .btn-tertiary {
+    @apply text-muted hover:text-fg px-1.5;
+  }
+  .btn-danger {
+    @apply text-danger border border-danger/40 hover:bg-danger/10;
+  }
+  .icon-btn {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded-md text-subtle hover:text-fg hover:bg-raised transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent;
+  }
+  .input {
+    @apply w-full h-9 px-3 rounded-md text-xs bg-surface text-fg border border-line placeholder:text-subtle focus:outline-none focus:border-accent/70 transition-colors;
+  }
+  .field-label {
+    @apply block text-xs font-medium text-fg mb-1.5;
+  }
+  .eyebrow {
+    @apply text-[11px] font-medium text-subtle;
+  }
+  .tag {
+    @apply inline-flex items-center gap-1 h-5 px-1.5 rounded text-[11px] font-medium bg-raised text-muted;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
-}
-
-/* Custom animation for copy and pulse effects */
-@keyframes flash-shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  background-size: 200% 100%;
-  animation: flash-shimmer 2s infinite;
+  background: var(--color-line-strong);
+  border-radius: 3px;
 }

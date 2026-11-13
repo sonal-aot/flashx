@@ -11,39 +11,27 @@ import { parseAndValidateAIResponse } from '../branch-generator/types';
 import { formatBranchName } from '../../utils/branchFormatter';
 import { SafeLogger } from '../../utils/logger';
 
+// Synced with https://aistudio.google.com/docs/models and /docs/pricing (Nov 2026).
+// Free-tier models first; Carbon and Argon are not available on the free tier.
 const GEMINI_MODELS: ModelInfo[] = [
   {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash (Recommended)',
-    description: 'Fast, highly capable multimodal model for everyday engineering applications and agents.',
+    description: 'Fast, highly capable model for everyday engineering tasks.',
     isDefault: true,
     isFreeTier: true,
   },
-  {
-    id: 'gemini-3.6-flash',
-    name: 'Gemini 3.6 Flash',
-    description: 'High-speed, cost-efficient Flash model for rapid code synthesis.',
-    isFreeTier: true,
-  },
-  {
-    id: 'gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash Lite',
-    description: 'Ultra-lightweight, high throughput Flash model.',
-    isFreeTier: true,
-  },
-  {
-    id: 'gemini-4-carbon',
-    name: 'Gemini 4 Carbon',
-    description: 'Frontier reasoning model for agentic coding and complex logic.',
-    isFreeTier: false,
-  },
-  {
-    id: 'gemini-4-argon',
-    name: 'Gemini 4 Argon',
-    description: 'Efficient frontier reasoning model.',
-    isFreeTier: false,
-  },
+  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', isFreeTier: true },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', isFreeTier: true },
+  { id: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen', isFreeTier: true },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', isFreeTier: true },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', isFreeTier: true },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', isFreeTier: true },
+  { id: 'gemini-4-carbon', name: 'Gemini 4 Carbon', isFreeTier: false },
+  { id: 'gemini-4-argon', name: 'Gemini 4 Argon', isFreeTier: false },
 ];
+
+const FREE_TIER_IDS = new Set(GEMINI_MODELS.filter((m) => m.isFreeTier).map((m) => m.id));
 
 export class GeminiProvider implements AIProvider {
   readonly id = 'gemini';
@@ -71,7 +59,7 @@ export class GeminiProvider implements AIProvider {
               .map((m: { name: string; displayName?: string; description?: string }) => {
                 const id = m.name.replace(/^models\//, '');
                 const isDefault = id === 'gemini-3.8-flash';
-                const isFreeTier = id.includes('flash');
+                const isFreeTier = FREE_TIER_IDS.has(id);
                 return {
                   id,
                   name: m.displayName ? `${m.displayName} (${id})` : id,

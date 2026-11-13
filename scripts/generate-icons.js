@@ -39,80 +39,63 @@ function createChunk(type, data) {
   return chunk;
 }
 
+// FlashX mark: lime (#C6FF32) rounded tile with a charcoal (#0E0F11) bolt,
+// matching the in-app <Logo />. Rendered with 4x4 supersampling for clean edges.
+const TILE = [198, 255, 50];
+const BOLT = [14, 15, 17];
+// Lightning bolt on a 24-unit grid (same silhouette as lucide "Zap").
+const BOLT_POLY = [[4, 14], [14, 2], [12, 10], [20, 10], [10, 22], [12, 14]];
+const SS = 4;
+
+function inPolygon(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function inRoundedRect(x, y, size, r) {
+  const cx = Math.min(Math.max(x, r), size - r);
+  const cy = Math.min(Math.max(y, r), size - r);
+  return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+}
+
 function createPNG(size) {
   const width = size;
   const height = size;
-
-  // Raw pixel data: each scanline starts with filter byte 0x00
   const scanlineLength = 1 + width * 4;
   const rawData = Buffer.alloc(height * scanlineLength);
 
-  const radius = size * 0.45;
-  const center = size / 2;
+  const cornerR = size * 0.22;
+  const scale = (size * 0.64) / 20; // bolt spans 20 grid units vertically
+  const toGrid = (v) => (v - size / 2) / scale + 12;
 
   for (let y = 0; y < height; y++) {
     const offset = y * scanlineLength;
     rawData[offset] = 0; // Filter None
-
     for (let x = 0; x < width; x++) {
-      const pxOffset = offset + 1 + x * 4;
-      const dx = x - center;
-      const dy = y - center;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      // Rounded rectangle / squircle background: FlashX deep indigo/violet
-      const cornerR = size * 0.22;
-      const inBoxX = Math.abs(dx) <= (center - cornerR);
-      const inBoxY = Math.abs(dy) <= (center - cornerR);
-      const cornerDx = Math.abs(dx) - (center - cornerR);
-      const cornerDy = Math.abs(dy) - (center - cornerR);
-      const inCorner = cornerDx > 0 && cornerDy > 0 && Math.sqrt(cornerDx * cornerDx + cornerDy * cornerDy) <= cornerR;
-      const isInside = inBoxX || inBoxY || inCorner;
-
-      if (isInside) {
-        // Gradient from #6366f1 (Indigo) to #a855f7 (Purple) to #3b82f6 (Blue)
-        const t = (x + y) / (width + height);
-        const r = Math.round(79 * (1 - t) + 99 * t);
-        const g = Math.round(70 * (1 - t) + 102 * t);
-        const b = Math.round(229 * (1 - t) + 241 * t);
-
-        // Flash symbol (lightning bolt)
-        // Normalized coordinates in [-0.5, 0.5]
-        const nx = dx / size;
-        const ny = dy / size;
-
-        // Lightning bolt polygon check
-        let isBolt = false;
-        if (
-          (nx >= -0.15 && nx <= 0.18 && ny >= -0.32 && ny <= 0.32)
-        ) {
-          // Dynamic lightning shape
-          const topSeg = ny <= 0.02 && nx >= (0.12 * (ny + 0.32) / 0.34 - 0.12) && nx <= (0.12 * (ny + 0.32) / 0.34 + 0.14);
-          const botSeg = ny >= -0.05 && nx >= (-0.20 + 0.22 * (ny + 0.05) / 0.37) && nx <= (-0.05 + 0.22 * (ny + 0.05) / 0.37);
-          if (topSeg || botSeg) {
-            isBolt = true;
-          }
+      let tile = 0;
+      let bolt = 0;
+      for (let sy = 0; sy < SS; sy++) {
+        for (let sx = 0; sx < SS; sx++) {
+          const px = x + (sx + 0.5) / SS;
+          const py = y + (sy + 0.5) / SS;
+          if (!inRoundedRect(px, py, size, cornerR)) continue;
+          tile++;
+          if (inPolygon(toGrid(px), toGrid(py), BOLT_POLY)) bolt++;
         }
-
-        if (isBolt) {
-          // Electric Amber/Gold lightning
-          rawData[pxOffset] = 254;     // R
-          rawData[pxOffset + 1] = 240; // G
-          rawData[pxOffset + 2] = 138; // B
-          rawData[pxOffset + 3] = 255; // A
-        } else {
-          rawData[pxOffset] = r;
-          rawData[pxOffset + 1] = g;
-          rawData[pxOffset + 2] = b;
-          rawData[pxOffset + 3] = 255;
-        }
-      } else {
-        // Transparent
-        rawData[pxOffset] = 0;
-        rawData[pxOffset + 1] = 0;
-        rawData[pxOffset + 2] = 0;
-        rawData[pxOffset + 3] = 0;
       }
+      const pxOffset = offset + 1 + x * 4;
+      if (tile === 0) {
+        rawData.fill(0, pxOffset, pxOffset + 4);
+        continue;
+      }
+      const t = bolt / tile; // bolt coverage within the tile
+      for (let c = 0; c < 3; c++) rawData[pxOffset + c] = Math.round(TILE[c] * (1 - t) + BOLT[c] * t);
+      rawData[pxOffset + 3] = Math.round((255 * tile) / (SS * SS));
     }
   }
 

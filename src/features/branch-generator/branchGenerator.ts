@@ -91,25 +91,4 @@ export class BranchGenerator {
       throw err;
     }
   }
-
-  /**
-   * Local rule-based fallback generation without calling an external AI model
-   */
-  static async generateOfflineFallback(issue: JiraIssue): Promise<BranchGenerationResult> {
-    const settings = await SettingsStorage.getSettings();
-    const result = FallbackGenerator.generate(issue, settings.naming);
-
-    await HistoryStorage.addHistory({
-      issueKey: issue.key,
-      issueTitle: issue.title,
-      issueType: issue.issueType,
-      branchName: result.recommended,
-      alternatives: result.alternatives,
-      reason: result.reason,
-      provider: settings.activeProvider,
-      model: 'offline-rule-engine',
-    });
-
-    return result;
-  }
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Cpu,
-  Key,
   Sliders,
   History,
   Shield,
@@ -14,6 +13,8 @@ import {
   ExternalLink,
   Plus,
   RefreshCw,
+  ChevronDown,
+  X,
   Zap,
 } from 'lucide-react';
 import { ProviderId, ModelInfo } from '../types/ai';
@@ -23,7 +24,33 @@ import { credentialStorage } from '../storage/credentialStorage';
 import { SettingsStorage } from '../storage/settingsStorage';
 import { HistoryStorage } from '../storage/historyStorage';
 import { copyToClipboard } from '../utils/clipboard';
-import { Header } from '../components/Header';
+import { Logo } from '../components/Header';
+import { ThemeToggle } from '../components/ThemeToggle';
+
+const TABS = [
+  { id: 'ai', label: 'AI Providers', icon: Cpu, title: 'AI Providers & BYOK', desc: 'FlashX calls Google AI Studio, OpenAI, or Anthropic directly from your browser. No proxy servers; keys never leave this device.' },
+  { id: 'naming', label: 'Branch Naming', icon: Sliders, title: 'Branch Naming Rules', desc: 'Define the template, casing, and prefixes every generated branch must follow.' },
+  { id: 'jira', label: 'Jira Integration', icon: Zap, title: 'Jira Integration', desc: 'Control which Jira hosts FlashX reads tickets from.' },
+  { id: 'history', label: 'History', icon: History, title: 'Generation History', desc: 'Branches you have generated, stored locally in this browser.' },
+  { id: 'security', label: 'Security & Privacy', icon: Shield, title: 'Security & Privacy', desc: 'How FlashX handles your credentials and ticket data.' },
+  { id: 'about', label: 'About', icon: Info, title: 'About FlashX', desc: '' },
+] as const;
+
+const PROVIDERS: { id: ProviderId; name: string; tag: string; keyUrl: string; placeholder: string }[] = [
+  { id: 'gemini', name: 'Google Gemini', tag: 'Free tier available', keyUrl: 'https://aistudio.google.com/app/apikey', placeholder: 'AIzaSy…' },
+  { id: 'openai', name: 'OpenAI', tag: 'GPT-4o Mini', keyUrl: 'https://platform.openai.com/api-keys', placeholder: 'sk-…' },
+  { id: 'claude', name: 'Anthropic Claude', tag: 'Claude 3.5 Haiku', keyUrl: 'https://console.anthropic.com/settings/keys', placeholder: 'sk-ant-…' },
+];
+
+const Row: React.FC<{ label: string; help?: React.ReactNode; htmlFor?: string; children: React.ReactNode }> = ({ label, help, htmlFor, children }) => (
+  <div className="py-6 grid gap-3 md:grid-cols-[220px_1fr] md:gap-8">
+    <div>
+      <label htmlFor={htmlFor} className="text-[13px] font-medium">{label}</label>
+      {help && <p className="mt-1 text-xs text-muted leading-relaxed">{help}</p>}
+    </div>
+    <div className="min-w-0">{children}</div>
+  </div>
+);
 
 export const OptionsApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -198,8 +225,8 @@ export const OptionsApp: React.FC = () => {
 
   if (!settings) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
-        <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
+      <div className="flex items-center justify-center min-h-screen bg-canvas">
+        <RefreshCw className="w-5 h-5 animate-spin text-subtle" />
       </div>
     );
   }
@@ -214,612 +241,467 @@ export const OptionsApp: React.FC = () => {
     );
   });
 
+  const current = TABS.find((t) => t.id === activeTab)!;
+  const saveNaming = (patch: Partial<BranchNamingConfig>) =>
+    handleSaveSettings({ naming: { ...settings.naming, ...patch } });
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans pb-16">
-      <Header showSettingsButton={false} />
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
-        <div className="flex items-center justify-between pb-6 border-b border-slate-200 dark:border-slate-800">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              FlashX Preferences
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Configure your AI providers, branch conventions, and Jira workspace rules.
-            </p>
-          </div>
-
-          {saveSuccessNotice && (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium animate-in fade-in">
-              <Check className="w-3.5 h-3.5" />
-              <span>Saved</span>
-            </div>
-          )}
+    <div className="min-h-screen bg-canvas text-fg md:flex">
+      {/* Sidebar */}
+      <aside className="md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0 border-b md:border-b-0 md:border-r border-line flex md:flex-col">
+        <div className="hidden md:flex items-center gap-2 h-16 px-6">
+          <Logo />
+          <span className="text-sm font-semibold tracking-tight">FlashX</span>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex items-center space-x-1 border-b border-slate-200 dark:border-slate-800 my-6 overflow-x-auto">
-          {[
-            { id: 'ai', label: 'AI Providers & BYOK', icon: Cpu },
-            { id: 'naming', label: 'Branch Naming Rules', icon: Sliders },
-            { id: 'jira', label: 'Jira Integration', icon: Zap },
-            { id: 'history', label: 'Generation History', icon: History },
-            { id: 'security', label: 'Security & Privacy', icon: Shield },
-            { id: 'about', label: 'About', icon: Info },
-          ].map((tab) => {
+        <nav className="flex md:flex-col gap-0.5 p-2 md:px-3 overflow-x-auto flex-1" aria-label="Settings sections">
+          {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex items-center space-x-2 px-3.5 py-2.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
-                  isActive
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 font-semibold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] whitespace-nowrap transition-colors ${
+                  isActive ? 'bg-raised text-fg font-medium' : 'text-muted hover:text-fg'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <Icon className={`w-4 h-4 ${isActive ? 'text-accent-text' : ''}`} />
+                {tab.label}
               </button>
             );
           })}
+        </nav>
+        <div className="hidden md:flex items-center justify-between px-6 h-14 border-t border-line text-[11px] text-subtle">
+          <span>Version 1.0.0</span>
+          <ThemeToggle />
         </div>
+      </aside>
 
-        {/* TAB 1: AI Providers & BYOK Credentials */}
-        {activeTab === 'ai' && (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 text-xs text-indigo-900 dark:text-indigo-200 flex items-start space-x-3">
-              <Key className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold">Direct Bring-Your-Own-Key (BYOK) Architecture</p>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">
-                  FlashX communicates directly from your browser to Google AI Studio, OpenAI, or Anthropic.
-                  No proxy servers. No storage of keys on our servers. You have complete control.
-                </p>
-              </div>
+      {/* Main */}
+      <main className="flex-1 min-w-0">
+        <div className="max-w-3xl px-6 md:px-12 py-10 md:py-14">
+          <header className="pb-8 border-b border-line flex items-start justify-between gap-6">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">{current.title}</h1>
+              {current.desc && <p className="mt-2 text-[13px] text-muted leading-relaxed max-w-xl">{current.desc}</p>}
             </div>
+            <span
+              role="status"
+              className={`flex items-center gap-1 text-xs text-accent-text transition-opacity ${saveSuccessNotice ? 'opacity-100' : 'opacity-0'}`}
+            >
+              <Check className="w-3.5 h-3.5" />
+              Saved
+            </span>
+          </header>
 
-            {/* Provider selection */}
-            <div className="space-y-3">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Active Provider
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { id: 'gemini' as ProviderId, name: 'Google Gemini', tag: 'Free tier available' },
-                  { id: 'openai' as ProviderId, name: 'OpenAI', tag: 'GPT-4o Mini' },
-                  { id: 'claude' as ProviderId, name: 'Anthropic Claude', tag: 'Claude 3.5 Haiku' },
-                ].map((p) => {
-                  const isSelected = settings.activeProvider === p.id;
-                  const hasKey = !!apiKeys[p.id];
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleSaveSettings({ activeProvider: p.id })}
-                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between ${
-                        isSelected
-                          ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-1 ring-indigo-500'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                          {p.name}
-                        </span>
-                        {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                      </div>
-                      <span className="text-[10px] text-slate-400 mb-2">{p.tag}</span>
-                      <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded-md inline-block self-start ${
-                          hasKey
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900'
-                            : 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900'
+          {/* AI Providers & BYOK */}
+          {activeTab === 'ai' && (
+            <div className="divide-y divide-line">
+              <Row label="Active provider" help="Used by the popup when you generate a branch.">
+                <div className="rounded-lg border border-line divide-y divide-line" role="radiogroup">
+                  {PROVIDERS.map((p) => {
+                    const isSelected = settings.activeProvider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => handleSaveSettings({ activeProvider: p.id })}
+                        className={`w-full flex items-center gap-3 px-4 h-12 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                          isSelected ? 'bg-surface' : 'hover:bg-surface'
                         }`}
                       >
-                        {hasKey ? 'Key Configured' : 'Key Missing'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Provider detail cards */}
-            <div className="space-y-4 pt-2">
-              {(['gemini', 'openai', 'claude'] as ProviderId[]).map((pid) => {
-                const provider = ProviderFactory.getProvider(pid);
-                const models = availableModels[pid] || [];
-                const currentModel = settings.selectedModels[pid] || provider.defaultModel;
-                const key = apiKeys[pid] || '';
-                const show = showKeys[pid];
-                const status = testStatuses[pid];
-
-                return (
-                  <div
-                    key={pid}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                          {provider.name}
-                        </h3>
-                        {settings.activeProvider === pid && (
-                          <span className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400">
-                            Active
-                          </span>
-                        )}
-                      </div>
-
-                      {/* External API Key link */}
-                      <a
-                        href={
-                          pid === 'gemini'
-                            ? 'https://aistudio.google.com/app/apikey'
-                            : pid === 'openai'
-                            ? 'https://platform.openai.com/api-keys'
-                            : 'https://console.anthropic.com/settings/keys'
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center space-x-1"
-                      >
-                        <span>Get API Key</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-
-                    {/* Model Picker */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Configured Model
-                      </label>
-                      <select
-                        value={currentModel}
-                        onChange={(e) => {
-                          const updated = {
-                            ...settings.selectedModels,
-                            [pid]: e.target.value,
-                          };
-                          handleSaveSettings({ selectedModels: updated });
-                        }}
-                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      >
-                        {models.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {m.isFreeTier ? '(Free tier)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* API Key Input */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                        <span>API Key</span>
-                        {key && (
-                          <button
-                            onClick={() => handleSaveApiKey(pid, '')}
-                            className="text-[10px] text-rose-500 hover:underline flex items-center space-x-1"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            <span>Remove Key</span>
-                          </button>
-                        )}
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={show ? 'text' : 'password'}
-                          placeholder={
-                            pid === 'gemini'
-                              ? 'AIzaSy...'
-                              : pid === 'openai'
-                              ? 'sk-...'
-                              : 'sk-ant-...'
-                          }
-                          value={key}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setApiKeys((prev) => ({ ...prev, [pid]: val }));
-                          }}
-                          onBlur={(e) => handleSaveApiKey(pid, e.target.value)}
-                          className="w-full text-xs font-mono px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 pr-9 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowKeys((prev) => ({ ...prev, [pid]: !prev[pid] }))
-                          }
-                          className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        >
-                          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Test Connection Button */}
-                    <div className="flex items-center space-x-3 pt-1">
-                      <button
-                        onClick={() => handleTestConnection(pid)}
-                        disabled={!key || status.testing}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 transition flex items-center space-x-1.5"
-                      >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 ${status.testing ? 'animate-spin' : ''}`}
-                        />
-                        <span>{status.testing ? 'Testing...' : 'Test Connection'}</span>
-                      </button>
-
-                      {status.result && (
                         <span
-                          className={`text-xs font-medium flex items-center space-x-1.5 ${
-                            status.result.success
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-rose-600 dark:text-rose-400'
+                          className={`w-3.5 h-3.5 rounded-full border shrink-0 flex items-center justify-center ${
+                            isSelected ? 'border-accent' : 'border-line-strong'
                           }`}
                         >
-                          <span>{status.result.message}</span>
-                          {status.result.latency && (
-                            <span className="text-[10px] text-slate-400">
-                              ({status.result.latency}ms)
-                            </span>
-                          )}
+                          {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
                         </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                        <span className="text-[13px] font-medium">{p.name}</span>
+                        <span className="text-xs text-subtle">{p.tag}</span>
+                        <span className={`ml-auto text-xs ${apiKeys[p.id] ? 'text-success' : 'text-subtle'}`}>
+                          {apiKeys[p.id] ? 'Key configured' : 'No key'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Row>
 
-        {/* TAB 2: Branch Naming Rules */}
-        {activeTab === 'naming' && (
-          <div className="space-y-6">
-            {/* Template format */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                Naming Template
-              </label>
-              <p className="text-[11px] text-slate-500">
-                Use variables: <code className="text-indigo-500">{"{type}"}</code>, <code className="text-indigo-500">{"{ticket}"}</code>, <code className="text-indigo-500">{"{description}"}</code>
-              </p>
-              <input
-                type="text"
-                value={settings.naming.template}
-                onChange={(e) =>
-                  handleSaveSettings({
-                    naming: { ...settings.naming, template: e.target.value },
-                  })
+              <Row label="Credentials" help="Choose a model and add an API key for each provider you use.">
+                <div className="rounded-lg border border-line divide-y divide-line">
+                  {PROVIDERS.map((p) => {
+                    const pid = p.id;
+                    const provider = ProviderFactory.getProvider(pid);
+                    const models = availableModels[pid] || [];
+                    const currentModel = settings.selectedModels[pid] || provider.defaultModel;
+                    const key = apiKeys[pid] || '';
+                    const show = showKeys[pid];
+                    const status = testStatuses[pid];
+
+                    return (
+                      <details key={pid} open={settings.activeProvider === pid} className="group">
+                        <summary className="flex items-center gap-2 px-4 h-12 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                          <span className="text-[13px] font-medium">{provider.name}</span>
+                          {settings.activeProvider === pid && <span className="tag text-accent-text">Active</span>}
+                          <ChevronDown className="ml-auto w-4 h-4 text-subtle transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="px-4 pb-5 pt-1 space-y-4">
+                          <div>
+                            <label htmlFor={`model-${pid}`} className="field-label">Model</label>
+                            <select
+                              id={`model-${pid}`}
+                              value={currentModel}
+                              onChange={(e) =>
+                                handleSaveSettings({ selectedModels: { ...settings.selectedModels, [pid]: e.target.value } })
+                              }
+                              className="input"
+                            >
+                              {models.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.isFreeTier ? '(Free tier)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label htmlFor={`key-${pid}`} className="text-xs font-medium">API key</label>
+                              <a href={p.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-fg">
+                                Get a key
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            <div className="relative">
+                              <input
+                                id={`key-${pid}`}
+                                type={show ? 'text' : 'password'}
+                                placeholder={p.placeholder}
+                                value={key}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setApiKeys((prev) => ({ ...prev, [pid]: val }));
+                                }}
+                                onBlur={(e) => handleSaveApiKey(pid, e.target.value)}
+                                className="input font-mono pr-9"
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowKeys((prev) => ({ ...prev, [pid]: !prev[pid] }))}
+                                className="icon-btn absolute right-1 top-1"
+                                aria-label={show ? 'Hide key' : 'Show key'}
+                              >
+                                {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={() => handleTestConnection(pid)} disabled={!key || status.testing} className="btn btn-secondary">
+                              <RefreshCw className={`w-3.5 h-3.5 ${status.testing ? 'animate-spin' : ''}`} />
+                              {status.testing ? 'Testing…' : 'Test connection'}
+                            </button>
+                            {key && (
+                              <button onClick={() => handleSaveApiKey(pid, '')} className="btn btn-danger">
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Remove key
+                              </button>
+                            )}
+                          </div>
+
+                          {status.result && (
+                            <p className={`text-xs leading-relaxed ${status.result.success ? 'text-success' : 'text-danger'}`}>
+                              {status.result.message}
+                              {status.result.latency && <span className="text-subtle"> · {status.result.latency}ms</span>}
+                            </p>
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              </Row>
+            </div>
+          )}
+
+          {/* Branch Naming Rules */}
+          {activeTab === 'naming' && (
+            <div className="divide-y divide-line">
+              <Row
+                label="Naming template"
+                htmlFor="template"
+                help={
+                  <>
+                    Variables: <code className="font-mono text-fg">{'{type}'}</code>, <code className="font-mono text-fg">{'{ticket}'}</code>,{' '}
+                    <code className="font-mono text-fg">{'{description}'}</code>
+                  </>
                 }
-                className="w-full text-xs font-mono px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
-                {[
-                  '{type}/{ticket}-{description}',
-                  '{ticket}/{type}-{description}',
-                  '{type}/{description}-{ticket}',
-                  '{type}/{ticket}_{description}',
-                ].map((tpl) => (
-                  <button
-                    key={tpl}
-                    onClick={() =>
-                      handleSaveSettings({
-                        naming: { ...settings.naming, template: tpl },
-                      })
-                    }
-                    className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[10px]"
-                  >
-                    {tpl}
-                  </button>
-                ))}
-              </div>
-            </div>
+              >
+                <input
+                  id="template"
+                  type="text"
+                  value={settings.naming.template}
+                  onChange={(e) => saveNaming({ template: e.target.value })}
+                  className="input font-mono"
+                  spellCheck={false}
+                />
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {[
+                    '{type}/{ticket}-{description}',
+                    '{ticket}/{type}-{description}',
+                    '{type}/{description}-{ticket}',
+                    '{type}/{ticket}_{description}',
+                  ].map((tpl) => (
+                    <button
+                      key={tpl}
+                      onClick={() => saveNaming({ template: tpl })}
+                      aria-pressed={settings.naming.template === tpl}
+                      className={`btn h-7 px-2 font-mono text-[11px] font-normal border ${
+                        settings.naming.template === tpl
+                          ? 'border-accent/60 text-fg bg-raised'
+                          : 'border-line text-muted hover:text-fg hover:border-line-strong'
+                      }`}
+                    >
+                      {tpl}
+                    </button>
+                  ))}
+                </div>
+              </Row>
 
-            {/* Separator & Casing */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold">Word Separator</label>
+              <Row label="Word separator" htmlFor="separator">
                 <select
+                  id="separator"
                   value={settings.naming.separator}
-                  onChange={(e) =>
-                    handleSaveSettings({
-                      naming: {
-                        ...settings.naming,
-                        separator: e.target.value as BranchNamingConfig['separator'],
-                      },
-                    })
-                  }
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
+                  onChange={(e) => saveNaming({ separator: e.target.value as BranchNamingConfig['separator'] })}
+                  className="input max-w-xs"
                 >
                   <option value="-">Hyphen (-)</option>
                   <option value="_">Underscore (_)</option>
                   <option value="/">Slash (/)</option>
                 </select>
-              </div>
+              </Row>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold">Casing Style</label>
+              <Row label="Casing" htmlFor="casing">
                 <select
+                  id="casing"
                   value={settings.naming.casing}
-                  onChange={(e) =>
-                    handleSaveSettings({
-                      naming: {
-                        ...settings.naming,
-                        casing: e.target.value as BranchNamingConfig['casing'],
-                      },
-                    })
-                  }
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
+                  onChange={(e) => saveNaming({ casing: e.target.value as BranchNamingConfig['casing'] })}
+                  className="input max-w-xs"
                 >
                   <option value="lowercase">All lowercase (bugfix/pay-123-tax)</option>
                   <option value="preserve-ticket">Uppercase ticket (bugfix/PAY-123-tax)</option>
                 </select>
-              </div>
+              </Row>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold">
-                  Max Branch Length ({settings.naming.maxLength} chars)
-                </label>
-                <input
-                  type="range"
-                  min="30"
-                  max="100"
-                  step="5"
-                  value={settings.naming.maxLength}
-                  onChange={(e) =>
-                    handleSaveSettings({
-                      naming: {
-                        ...settings.naming,
-                        maxLength: Number(e.target.value),
-                      },
-                    })
-                  }
-                  className="w-full mt-2 accent-indigo-600"
-                />
-              </div>
-            </div>
+              <Row label="Maximum length" htmlFor="maxlen" help="Longer names are trimmed at a word boundary.">
+                <div className="flex items-center gap-4 max-w-sm">
+                  <input
+                    id="maxlen"
+                    type="range"
+                    min="30"
+                    max="100"
+                    step="5"
+                    value={settings.naming.maxLength}
+                    onChange={(e) => saveNaming({ maxLength: Number(e.target.value) })}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="font-mono text-xs w-14 text-right">{settings.naming.maxLength} chars</span>
+                </div>
+              </Row>
 
-            {/* Allowed Prefixes Manager */}
-            <div className="space-y-3 pt-2">
-              <label className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                Allowed Branch Prefixes
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {settings.naming.allowedPrefixes.map((p) => (
-                  <span
-                    key={p}
-                    className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
-                  >
-                    <span>{p}</span>
-                    <button
-                      onClick={() => handleRemovePrefix(p)}
-                      className="text-slate-400 hover:text-rose-500 ml-1"
-                      title="Remove prefix"
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex items-center space-x-2 max-w-xs pt-1">
-                <input
-                  type="text"
-                  placeholder="e.g. experiment/"
-                  value={newPrefixInput}
-                  onChange={(e) => setNewPrefixInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddPrefix()}
-                  className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 flex-1"
-                />
-                <button
-                  onClick={handleAddPrefix}
-                  className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center space-x-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: Jira Integration */}
-        {activeTab === 'jira' && (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
-              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                Supported Jira Instances
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                By default, FlashX automatically detects Jira Cloud pages on <code className="text-indigo-500">https://*.atlassian.net/*</code>.
-                If your company uses a custom domain (e.g. <code className="text-indigo-500">jira.company.com</code>), add it below.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <label className="text-xs font-semibold">Custom Jira Hostnames</label>
-              {settings.customJiraDomains.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">No custom domains added.</p>
-              ) : (
-                <div className="space-y-2">
-                  {settings.customJiraDomains.map((d) => (
-                    <div
-                      key={d}
-                      className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-mono max-w-md"
-                    >
-                      <span>{d}</span>
+              <Row label="Allowed prefixes" htmlFor="new-prefix" help="Generated branches must start with one of these.">
+                <div className="flex flex-wrap gap-1.5">
+                  {settings.naming.allowedPrefixes.map((p) => (
+                    <span key={p} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-md bg-surface border border-line font-mono text-xs">
+                      {p}
                       <button
-                        onClick={() => handleRemoveDomain(d)}
-                        className="text-rose-500 hover:underline text-[11px]"
+                        onClick={() => handleRemovePrefix(p)}
+                        className="w-5 h-5 inline-flex items-center justify-center rounded text-subtle hover:text-danger"
+                        aria-label={`Remove ${p}`}
                       >
-                        Remove
+                        <X className="w-3 h-3" />
                       </button>
-                    </div>
+                    </span>
                   ))}
                 </div>
-              )}
+                <div className="flex items-center gap-2 max-w-sm mt-3">
+                  <input
+                    id="new-prefix"
+                    type="text"
+                    placeholder="experiment/"
+                    value={newPrefixInput}
+                    onChange={(e) => setNewPrefixInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddPrefix()}
+                    className="input font-mono"
+                  />
+                  <button onClick={handleAddPrefix} className="btn btn-secondary h-9">
+                    <Plus className="w-3.5 h-3.5" />
+                    Add
+                  </button>
+                </div>
+              </Row>
+            </div>
+          )}
 
-              <div className="flex items-center space-x-2 max-w-sm pt-1">
+          {/* Jira Integration */}
+          {activeTab === 'jira' && (
+            <div className="divide-y divide-line">
+              <Row
+                label="Jira Cloud"
+                help="Detected automatically. No setup needed."
+              >
+                <code className="font-mono text-xs">https://*.atlassian.net/*</code>
+              </Row>
+              <Row
+                label="Custom hostnames"
+                htmlFor="new-domain"
+                help={<>For self-hosted or custom domains, such as <code className="font-mono text-fg">jira.company.com</code>.</>}
+              >
+                {settings.customJiraDomains.length === 0 ? (
+                  <p className="text-xs text-subtle">No custom hostnames added.</p>
+                ) : (
+                  <ul className="rounded-lg border border-line divide-y divide-line">
+                    {settings.customJiraDomains.map((d) => (
+                      <li key={d} className="flex items-center justify-between h-10 px-3">
+                        <span className="font-mono text-xs">{d}</span>
+                        <button onClick={() => handleRemoveDomain(d)} className="btn btn-tertiary h-7 hover:text-danger">
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex items-center gap-2 max-w-sm mt-3">
+                  <input
+                    id="new-domain"
+                    type="text"
+                    placeholder="jira.mycompany.com"
+                    value={newDomainInput}
+                    onChange={(e) => setNewDomainInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddDomain()}
+                    className="input font-mono"
+                  />
+                  <button onClick={handleAddDomain} className="btn btn-secondary h-9">
+                    <Plus className="w-3.5 h-3.5" />
+                    Add
+                  </button>
+                </div>
+              </Row>
+            </div>
+          )}
+
+          {/* Generation History */}
+          {activeTab === 'history' && (
+            <div className="pt-6">
+              <div className="flex items-center justify-between gap-3">
                 <input
-                  type="text"
-                  placeholder="jira.mycompany.com"
-                  value={newDomainInput}
-                  onChange={(e) => setNewDomainInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddDomain()}
-                  className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 flex-1"
+                  type="search"
+                  placeholder="Search by ticket, title, or branch"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="input max-w-xs"
+                  aria-label="Search history"
                 />
-                <button
-                  onClick={handleAddDomain}
-                  className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center space-x-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Domain</span>
-                </button>
+                {historyItems.length > 0 && (
+                  <button onClick={handleClearAllHistory} className="btn btn-danger">
+                    Clear history
+                  </button>
+                )}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* TAB 4: Generation History */}
-        {activeTab === 'history' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <input
-                type="text"
-                placeholder="Search history by ticket or branch..."
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-72"
-              />
-
-              {historyItems.length > 0 && (
-                <button
-                  onClick={handleClearAllHistory}
-                  className="px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                >
-                  Clear All History
-                </button>
+              {filteredHistory.length === 0 ? (
+                <p className="py-16 text-center text-xs text-subtle">
+                  {historyItems.length === 0 ? 'No branches generated yet.' : 'No matches.'}
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-line border-t border-line">
+                  {filteredHistory.map((item) => (
+                    <li key={item.id} className="py-4 flex items-start justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-mono font-semibold text-accent-text shrink-0">{item.issueKey}</span>
+                          <span className="text-muted truncate">{item.issueTitle}</span>
+                        </div>
+                        <div className="font-mono text-[13px] break-all">{item.branchName}</div>
+                        <div className="text-[11px] text-subtle">
+                          {new Date(item.timestamp).toLocaleString()} · {item.provider} · {item.model}
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0">
+                        <button
+                          onClick={() => handleCopyHistory(item.branchName, item.id)}
+                          className="icon-btn"
+                          title="Copy branch name"
+                          aria-label="Copy branch name"
+                        >
+                          {copiedId === item.id ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteHistory(item.id)}
+                          className="icon-btn hover:text-danger"
+                          title="Delete entry"
+                          aria-label="Delete entry"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
+          )}
 
-            {filteredHistory.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-xs">
-                No generated branch history found.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between"
-                  >
-                    <div className="space-y-1 overflow-hidden mr-3">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-mono text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded">
-                          {item.issueKey}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                          {item.issueTitle}
-                        </span>
-                      </div>
-                      <div className="font-mono text-xs text-slate-600 dark:text-slate-300 break-all">
-                        {item.branchName}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        {new Date(item.timestamp).toLocaleString()} • {item.provider} ({item.model})
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-1 shrink-0">
-                      <button
-                        onClick={() => handleCopyHistory(item.branchName, item.id)}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-indigo-600"
-                        title="Copy branch name"
-                      >
-                        {copiedId === item.id ? (
-                          <Check className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteHistory(item.id)}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-rose-500"
-                        title="Delete entry"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          {/* Security & Privacy */}
+          {activeTab === 'security' && (
+            <div>
+              <dl className="divide-y divide-line">
+                {[
+                  ['Local storage only', <>API keys are stored solely in <code className="font-mono text-fg">chrome.storage.local</code> in this browser.</>],
+                  ['Never synced', 'Credentials are excluded from Chrome Sync, so keys never travel between machines.'],
+                  ['No proxy servers', 'Requests go directly from your browser to Google AI Studio, OpenAI, or Anthropic.'],
+                  ['No analytics', 'No telemetry, no tracking cookies, and no third-party scripts.'],
+                  ['Read-only on Jira', 'FlashX cannot modify, comment on, or edit tickets.'],
+                ].map(([title, body]) => (
+                  <div key={title as string} className="py-5 grid gap-1 md:grid-cols-[220px_1fr] md:gap-8">
+                    <dt className="text-[13px] font-medium">{title}</dt>
+                    <dd className="text-[13px] text-muted leading-relaxed">{body}</dd>
                   </div>
                 ))}
+              </dl>
+              <div className="mt-4 pl-4 border-l-2 border-warn">
+                <p className="text-[13px] font-medium">Local storage limitations</p>
+                <p className="mt-1 text-xs text-muted leading-relaxed">
+                  Extension storage is sandboxed to FlashX but is not encrypted at rest with hardware-backed keys. Anyone with
+                  physical or administrative access to this computer could inspect the browser profile. You can remove your
+                  credentials at any time from AI Providers.
+                </p>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 5: Security & Privacy */}
-        {activeTab === 'security' && (
-          <div className="space-y-4 max-w-2xl text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
-                <Shield className="w-4 h-4 text-indigo-500" />
-                <span>Security & Privacy Architecture</span>
-              </h3>
-              <p>
-                FlashX is built for privacy-conscious software engineers and enterprise security policies.
-              </p>
-              <ul className="list-disc pl-5 space-y-1.5">
-                <li>
-                  <strong>Local Storage Only:</strong> Your API keys are stored solely in <code className="text-indigo-500">chrome.storage.local</code> within your browser.
-                </li>
-                <li>
-                  <strong>Never Synced to Cloud:</strong> FlashX explicitly disables Chrome Sync for credentials so keys are never synced across machines.
-                </li>
-                <li>
-                  <strong>Zero Proxy Servers:</strong> LLM requests are dispatched directly from your browser to Google AI Studio, OpenAI, or Anthropic APIs.
-                </li>
-                <li>
-                  <strong>Zero Analytics & Tracking:</strong> FlashX has no telemetry, no tracking cookies, and no third-party scripts.
-                </li>
-                <li>
-                  <strong>Never Modifies Jira:</strong> FlashX is strictly read-only on your Jira tabs and cannot modify, comment, or edit tickets.
-                </li>
-              </ul>
             </div>
+          )}
 
-            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 space-y-1.5">
-              <p className="font-semibold text-xs">Local Browser Storage Limitations Disclosure</p>
-              <p className="text-[11px] leading-relaxed">
-                Chrome extension local storage is sandboxed to the extension origin, but is not encrypted at rest with hardware-backed keys. If unauthorized actors have physical or administrative access to your computer, local browser profiles could potentially be inspected. You can delete your credentials in FlashX at any time.
+          {/* About */}
+          {activeTab === 'about' && (
+            <div className="pt-8 space-y-5 max-w-lg">
+              <Logo size="lg" />
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight">From Jira to Git. In a flash.</h2>
+                <p className="mt-1 text-xs text-subtle">Version 1.0.0</p>
+              </div>
+              <p className="text-[13px] text-muted leading-relaxed">
+                FlashX reads the Jira ticket you have open and generates a clean, convention-compliant Git branch name using
+                the AI provider you choose, or its built-in local engine when you are offline.
               </p>
             </div>
-          </div>
-        )}
-
-        {/* TAB 6: About FlashX */}
-        {activeTab === 'about' && (
-          <div className="max-w-md p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 text-center mx-auto">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-amber-400 flex items-center justify-center shadow-md">
-              <Zap className="w-6 h-6 text-white fill-amber-300 stroke-indigo-900 stroke-1" />
-            </div>
-
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">FlashX</h2>
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                From Jira to Git. In a flash.
-              </p>
-              <p className="text-xs text-slate-400 mt-1">Version 1.0.0 (Production Ready)</p>
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Production-ready Chrome browser extension that automatically understands Jira tickets and generates standardized, clean Git branch names using your preferred AI model.
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 };
