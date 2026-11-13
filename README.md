@@ -106,7 +106,7 @@ npm install
 
 ### 2. Run Automated Tests
 
-Run all 10 test suites (70 tests covering Jira extraction, Git ref validation, AI providers, storage, clipboard, templates, etc.):
+Run all 10 test suites (76 tests covering Jira extraction, Git ref validation, AI providers, storage, clipboard, templates, etc.):
 
 ```bash
 npm test

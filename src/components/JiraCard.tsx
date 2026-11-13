@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
-import { ExternalLink, ChevronDown, ChevronUp, RefreshCw, AlertCircle, FileText, Bug, Bookmark, CheckSquare, Layers } from 'lucide-react';
+import { ExternalLink, ChevronDown, ChevronUp, RefreshCw, AlertCircle, Bug, Bookmark, CheckSquare, Layers } from 'lucide-react';
 import { JiraIssue } from '../types/jira';
 
 interface JiraCardProps {
   issue: JiraIssue | null;
   isLoading: boolean;
   onRefresh?: () => void;
-  onUseDemo?: () => void;
 }
 
-export const JiraCard: React.FC<JiraCardProps> = ({
-  issue,
-  isLoading,
-  onRefresh,
-  onUseDemo,
-}) => {
+export const JiraCard: React.FC<JiraCardProps> = ({ issue, isLoading, onRefresh }) => {
   const [isDescExpanded, setIsDescExpanded] = useState(false);
 
   const getTypeBadgeStyle = (type: string) => {
@@ -77,15 +71,6 @@ export const JiraCard: React.FC<JiraCardProps> = ({
             >
               <RefreshCw className="w-3 h-3 mr-1.5" />
               Re-scan Tab
-            </button>
-          )}
-          {onUseDemo && (
-            <button
-              onClick={onUseDemo}
-              className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition"
-            >
-              <FileText className="w-3 h-3 mr-1.5" />
-              Use Demo Ticket
             </button>
           )}
         </div>

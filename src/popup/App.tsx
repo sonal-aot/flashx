@@ -14,20 +14,6 @@ import { BranchGenerator } from '../features/branch-generator/branchGenerator';
 import { ProviderFactory } from '../features/ai-providers/providerFactory';
 import { copyToClipboard } from '../utils/clipboard';
 
-// Sample demo issue for instant testing without an active Jira instance
-const DEMO_JIRA_ISSUE: JiraIssue = {
-  key: 'PAY-123',
-  title: 'Fix incorrect tax calculation for international orders',
-  description:
-    'Tax calculation currently uses the domestic tax rate for international orders. Update the calculation logic to apply the correct country-specific rate.',
-  issueType: 'Bug',
-  projectKey: 'PAY',
-  url: 'https://jira.example.com/browse/PAY-123',
-  priority: 'High',
-  status: 'In Progress',
-  detectedAt: Date.now(),
-};
-
 export const App: React.FC = () => {
   const [issue, setIssue] = useState<JiraIssue | null>(null);
   const [isLoadingIssue, setIsLoadingIssue] = useState(true);
@@ -179,7 +165,6 @@ export const App: React.FC = () => {
           issue={issue}
           isLoading={isLoadingIssue}
           onRefresh={scanActiveTab}
-          onUseDemo={() => setIssue(DEMO_JIRA_ISSUE)}
         />
 
         {/* Error Alert */}
