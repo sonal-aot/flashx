@@ -46,6 +46,6 @@ export class SafeLogger {
   }
 
   static error(...args: unknown[]): void {
-    console.error('[FlashX]', ...this.sanitizeArgs(args));
+    console.warn('[FlashX Error]', ...this.sanitizeArgs(args));
   }
 }

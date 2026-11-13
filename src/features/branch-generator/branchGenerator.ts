@@ -10,7 +10,8 @@ import { SafeLogger } from '../../utils/logger';
 export class BranchGenerator {
   /**
    * Generates a branch name using the user's selected AI provider.
-   * If credentials are missing or the user chooses offline mode, falls back gracefully.
+   * If the remote provider experiences temporary 503 high demand or 429 rate limits,
+   * seamlessly falls back to the deterministic local rule engine so the developer is never blocked.
    */
   static async generate(issue: JiraIssue): Promise<BranchGenerationResult> {
     const settings = await SettingsStorage.getSettings();
@@ -55,7 +56,39 @@ export class BranchGenerator {
 
       return result;
     } catch (err: unknown) {
-      SafeLogger.error('AI branch generation failed:', err);
+      SafeLogger.warn('Remote AI generation encountered issue, checking graceful fallback:', err);
+
+      const msg = (err as Error)?.message || '';
+      // If error is a 503 high demand spike, 429 rate limit, or service unavailable:
+      if (
+        msg.includes('503') ||
+        msg.toLowerCase().includes('high demand') ||
+        msg.toLowerCase().includes('high traffic') ||
+        msg.toLowerCase().includes('rate limit') ||
+        msg.toLowerCase().includes('overloaded') ||
+        msg.toLowerCase().includes('temporarily unavailable')
+      ) {
+        SafeLogger.info('Provider experiencing high demand. Seamlessly generating via local rule engine fallback.');
+        const fallbackResult = FallbackGenerator.generate(issue, settings.naming);
+        const resultWithNotice: BranchGenerationResult = {
+          ...fallbackResult,
+          reason: `${fallbackResult.reason} (Synthesized via FlashX local engine due to temporary Google AI Studio 503 capacity spike)`,
+        };
+
+        await HistoryStorage.addHistory({
+          issueKey: issue.key,
+          issueTitle: issue.title,
+          issueType: issue.issueType,
+          branchName: resultWithNotice.recommended,
+          alternatives: resultWithNotice.alternatives,
+          reason: resultWithNotice.reason,
+          provider: providerId,
+          model: 'offline-rule-fallback',
+        });
+
+        return resultWithNotice;
+      }
+
       throw err;
     }
   }
