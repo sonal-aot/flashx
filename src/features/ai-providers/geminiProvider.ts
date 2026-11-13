@@ -53,10 +53,14 @@ export class GeminiProvider implements AIProvider {
   async getAvailableModels(apiKey?: string): Promise<ModelInfo[]> {
     if (apiKey && apiKey.trim()) {
       try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 6000);
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey.trim())}`,
-          { signal: AbortSignal.timeout(6000) }
+          { signal: controller.signal }
         );
+        clearTimeout(timer);
+
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data?.models)) {
@@ -105,148 +109,103 @@ export class GeminiProvider implements AIProvider {
     const start = Date.now();
     const trimmedKey = apiKey.trim();
 
-    // 1. Fetch available models from Google AI Studio models.list endpoint
-    let modelsFromApi: string[] = [];
+    // Fast, lightweight verification via GET /v1beta/models/${model} (responds in ~200ms without heavy LLM inference)
     try {
-      const listRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmedKey)}`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      if (listRes.ok) {
-        const data = await listRes.json();
-        if (Array.isArray(data?.models)) {
-          modelsFromApi = data.models
-            .filter((m: { supportedGenerationMethods?: string[] }) =>
-              m.supportedGenerationMethods?.includes('generateContent')
-            )
-            .map((m: { name?: string }) => (m.name ? m.name.replace(/^models\//, '') : ''))
-            .filter(Boolean);
-        }
-      } else if (listRes.status === 400 || listRes.status === 403) {
-        const err = await listRes.json().catch(() => ({}));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}?key=${encodeURIComponent(trimmedKey)}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timer);
+      const latencyMs = Date.now() - start;
+
+      if (response.ok) {
+        return {
+          success: true,
+          message: `Successfully connected to Google Gemini (${model})!`,
+          modelTested: model,
+          latencyMs,
+        };
+      }
+
+      const errorBody = await response.json().catch(() => ({}));
+      const rawMessage = errorBody?.error?.message || response.statusText;
+
+      // If unauthorized or permission denied, stop immediately
+      if (response.status === 400 || response.status === 403) {
         return {
           success: false,
           message: 'Invalid Google AI Studio API key or project permission denied.',
-          errorDetails: err?.error?.message || listRes.statusText,
+          errorDetails: rawMessage,
         };
       }
-    } catch (listErr) {
-      SafeLogger.warn('Could not list Gemini models from API, probing directly:', listErr);
-    }
 
-    // Determine candidate models to test
-    let candidateModels: string[] = [];
-    if (modelsFromApi.length > 0) {
-      if (modelsFromApi.includes(model)) {
-        candidateModels.push(model);
-      }
-      for (const pref of ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-4-carbon', 'gemini-4-argon']) {
-        if (modelsFromApi.includes(pref) && !candidateModels.includes(pref)) {
-          candidateModels.push(pref);
-        }
-      }
-      for (const m of modelsFromApi) {
-        if (!candidateModels.includes(m)) {
-          candidateModels.push(m);
-        }
-      }
-    } else {
-      candidateModels = [
-        model,
-        ...(model !== 'gemini-3.8-flash' ? ['gemini-3.8-flash'] : []),
-        'gemini-3.6-flash',
-        'gemini-3.5-flash-lite',
-        'gemini-4-carbon',
-        'gemini-4-argon',
-      ];
-    }
+      // If 404 (model not found on this project), query available models list
+      if (response.status === 404) {
+        try {
+          const listController = new AbortController();
+          const listTimer = setTimeout(() => listController.abort(), 6000);
+          const listRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmedKey)}`,
+            { signal: listController.signal }
+          );
+          clearTimeout(listTimer);
 
-    let lastErrorDetails = '';
+          if (listRes.ok) {
+            const data = await listRes.json().catch(() => ({}));
+            const available = (data?.models || [])
+              .filter((m: { supportedGenerationMethods?: string[] }) =>
+                m.supportedGenerationMethods?.includes('generateContent')
+              )
+              .map((m: { name?: string }) => (m.name ? m.name.replace(/^models\//, '') : ''))
+              .filter(Boolean);
 
-    for (const candidate of candidateModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${encodeURIComponent(
-          trimmedKey
-        )}`;
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'Respond with: {"status":"ok"}' }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.1,
-            },
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timer);
-        const latencyMs = Date.now() - start;
-
-        if (response.ok) {
-          const isFallback = candidate !== model;
-          return {
-            success: true,
-            message: isFallback
-              ? `Connected to Google Gemini! Switched to accessible model "${candidate}".`
-              : `Successfully connected to Google Gemini (${candidate})!`,
-            modelTested: candidate,
-            latencyMs,
-          };
-        }
-
-        const errorBody = await response.json().catch(() => ({}));
-        lastErrorDetails = errorBody?.error?.message || response.statusText;
-
-        // If unauthorized or permission denied, stop trying other models (key issue)
-        if (response.status === 400 || response.status === 403) {
-          return {
-            success: false,
-            message: 'Invalid Google AI Studio API key or project permission denied.',
-            errorDetails: lastErrorDetails,
-          };
-        }
-
-        // If 404 (model not provisioned for this key), try the next candidate model
-        if (response.status === 404) {
-          continue;
-        }
-
-        if (response.status === 429) {
-          return {
-            success: false,
-            message: 'Gemini API rate limit reached. Please wait a moment.',
-            errorDetails: lastErrorDetails,
-          };
+            const alt = available.find((m: string) => m.includes('flash')) || available[0];
+            if (alt) {
+              return {
+                success: true,
+                message: `Connected! Model "${model}" was not accessible; switched to accessible model "${alt}".`,
+                modelTested: alt,
+                latencyMs: Date.now() - start,
+              };
+            }
+          }
+        } catch {
+          // Ignore list error and report model not found
         }
 
         return {
           success: false,
-          message: `Connection failed with status ${response.status}`,
-          errorDetails: lastErrorDetails,
+          message: `Model "${model}" not found or not accessible on this key. Please select a model enabled for your project.`,
+          errorDetails: rawMessage,
         };
-      } catch (err: unknown) {
-        const isAbort = (err as Error)?.name === 'AbortError';
-        if (isAbort) {
-          return {
-            success: false,
-            message: 'Connection timed out (10s limit).',
-            errorDetails: (err as Error)?.message,
-          };
-        }
       }
-    }
 
-    return {
-      success: false,
-      message: `Model "${model}" not found or not accessible on this key. Please select an active model (e.g. gemini-3.8-flash).`,
-      errorDetails: lastErrorDetails,
-    };
+      if (response.status === 429) {
+        return {
+          success: false,
+          message: 'Gemini API rate limit reached. Please wait a moment.',
+          errorDetails: rawMessage,
+        };
+      }
+
+      return {
+        success: false,
+        message: `Connection failed with status ${response.status}`,
+        errorDetails: rawMessage,
+      };
+    } catch (err: unknown) {
+      const isAbort = (err as Error)?.name === 'AbortError';
+      return {
+        success: false,
+        message: isAbort ? 'Connection timed out (15s limit). Please check your internet connection.' : 'Network error reaching Google Gemini API.',
+        errorDetails: (err as Error)?.message,
+      };
+    }
   }
 
   async generateBranchName(request: BranchGenerationRequest): Promise<BranchGenerationResult> {
@@ -261,7 +220,7 @@ export class GeminiProvider implements AIProvider {
       )}`;
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 30000); // Generous 30s timeout for LLM inference
 
       try {
         const response = await fetch(url, {
@@ -276,6 +235,7 @@ export class GeminiProvider implements AIProvider {
             ],
             generationConfig: {
               responseMimeType: 'application/json',
+              maxOutputTokens: 512,
               temperature: 0.2,
             },
           }),

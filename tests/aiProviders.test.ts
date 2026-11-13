@@ -114,11 +114,9 @@ describe('AI Providers', () => {
     it('automatically falls back to accessible model when primary model returns 404', async () => {
       const provider = new GeminiProvider();
 
-      let callCount = 0;
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
-        callCount++;
-        // First call with legacy/custom model returns 404
-        if (url.includes('legacy-model:generateContent')) {
+        // First call with legacy-model returns 404
+        if (url.includes('legacy-model')) {
           return Promise.resolve({
             ok: false,
             status: 404,
@@ -126,17 +124,21 @@ describe('AI Providers', () => {
             json: async () => ({ error: { message: 'models/legacy-model is not found' } }),
           });
         }
-        // Fallback call with gemini-3.8-flash succeeds
+        // Fallback models list query returns available models
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'ok' }),
+          json: async () => ({
+            models: [
+              { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+            ],
+          }),
         });
       });
 
       const res = await provider.testConnection('AIzaSyValidKey', 'legacy-model');
       expect(res.success).toBe(true);
       expect(res.modelTested).toBe('gemini-3.8-flash');
-      expect(res.message).toContain('Switched to accessible model "gemini-3.8-flash"');
+      expect(res.message).toContain('switched to accessible model "gemini-3.8-flash"');
     });
   });
 
